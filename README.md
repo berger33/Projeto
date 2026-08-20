@@ -1,65 +1,53 @@
 # Aurora Moda Online — Agente Inteligente Documental
 
-Projeto desenvolvido para o **Challenge Alura Agente**, utilizando como contexto empresarial uma loja de roupas online.
+Projeto desenvolvido para o **Challenge Alura Agente**, usando como contexto empresarial uma loja de roupas online. A solução responde dúvidas de clientes sobre **compras, pagamentos, entregas, privacidade, devoluções, reembolsos e suporte** com base exclusivamente na documentação corporativa do projeto.
 
-A solução resolve um problema real de atendimento: responder dúvidas recorrentes de clientes sobre **compras, pagamentos, entregas, privacidade, devoluções, reembolsos e suporte**, utilizando exclusivamente a documentação corporativa disponível na base de conhecimento.
+## ▶️ Demo online — experimente sem instalar
 
-## 🚀 Como executar — forma principal e recomendada no Windows
+**[Abrir o Agente Aurora no navegador](https://htmlpreview.github.io/?https://github.com/berger33/Projeto/blob/main/demo/index.html)**
 
-A forma oficial e mais simples de executar o projeto no Windows é pelo arquivo:
+A demo pública permite conversar com o agente imediatamente, testar perguntas sugeridas, visualizar as fontes recuperadas e confirmar o comportamento de recusa para perguntas fora da documentação.
+
+**[⬇ Baixar o projeto completo](https://github.com/berger33/Projeto/archive/refs/heads/main.zip)** · **[📂 Ver código-fonte](https://github.com/berger33/Projeto)**
+
+> **Transparência:** a demo online executa no navegador uma edição demonstrativa do retrieval documental para permitir avaliação imediata. A aplicação completa deste repositório usa **Python, FastAPI, Pandas, PyPDF e LangChain** e lê os PDFs/CSV reais da pasta `docs/`.
+
+---
+
+## 🚀 Execução completa — forma recomendada no Windows
+
+A forma oficial e mais simples de executar a versão completa é:
 
 ```text
 INICIAR_WINDOWS.bat
 ```
 
-### Passo a passo
-
 1. Clone ou baixe este repositório.
 2. Abra a pasta do projeto.
-3. Dê **duplo clique em `INICIAR_WINDOWS.bat`**.
+3. Dê duplo clique em `INICIAR_WINDOWS.bat`.
 4. Aguarde a instalação e os testes automáticos.
-5. O navegador será aberto em:
+5. A aplicação será aberta em `http://127.0.0.1:8000`.
 
-```text
-http://127.0.0.1:8000
-```
+O script detecta o Python, cria `.venv`, atualiza `pip/setuptools/wheel`, instala dependências, executa os testes e inicia FastAPI/Uvicorn. O projeto é compatível com Python **3.12, 3.13 e 3.14**.
 
-O script realiza automaticamente:
-
-- detecção do Python instalado;
-- criação do ambiente virtual `.venv`;
-- atualização de `pip`, `setuptools` e `wheel`;
-- instalação das dependências;
-- execução dos testes automatizados;
-- inicialização do FastAPI/Uvicorn;
-- abertura da aplicação no navegador.
-
-> Recomenda-se Python **3.12, 3.13 ou 3.14**. O projeto foi ajustado e testado para evitar problemas de dependências no Windows/Python 3.14.
-
-Se houver algum problema de ambiente, execute:
-
-```text
-DIAGNOSTICO_WINDOWS.bat
-```
+Se houver problema de ambiente, execute `DIAGNOSTICO_WINDOWS.bat`.
 
 ---
 
 ## 🎯 Problema empresarial resolvido
 
-Em um e-commerce de roupas, clientes frequentemente repetem perguntas como:
+Em um e-commerce de roupas, clientes repetem dúvidas como:
 
 - Qual é o prazo para devolução?
 - O produto pode estar usado?
 - Quais formas de pagamento são aceitas?
 - Quando começa o prazo de entrega?
-- Como os meus dados pessoais são utilizados?
+- Como os dados pessoais são utilizados?
 - Como entrar em contato com o suporte?
 
-O agente da **Aurora Moda Online** centraliza essas informações e responde com base apenas nos documentos oficiais do projeto, reduzindo dúvidas repetitivas e evitando respostas fora da política da empresa.
+O agente centraliza essas informações, reduz perguntas repetitivas e evita respostas fora da política oficial.
 
 ## 📚 Base de conhecimento
-
-A pasta `docs/` contém os documentos utilizados pelo agente:
 
 ```text
 docs/
@@ -69,226 +57,121 @@ docs/
 └── faq.csv
 ```
 
-Os documentos incluem:
+- **Política de Privacidade** — coleta, utilização, compartilhamento e proteção de dados.
+- **Política de Reembolso e Devoluções** — devolução em até **10 dias corridos após o recebimento**, desde que o produto esteja em perfeitas condições.
+- **FAQ** — compra, pagamento, entrega, rastreamento e suporte.
 
-- **Política de Privacidade** — coleta, utilização, compartilhamento e proteção de dados;
-- **Política de Reembolso e Devoluções** — devolução em até **10 dias corridos após o recebimento**, desde que o produto esteja em perfeitas condições;
-- **FAQ** — processo de compra, pagamentos, entrega, rastreamento e suporte.
+## 🤖 Agente inteligente
 
-## 🤖 Agente Inteligente Funcional
+O pipeline em `app/agent.py`:
 
-O agente implementado em `app/agent.py` realiza um fluxo de recuperação documental (RAG):
-
-1. lê arquivos PDF com **PyPDF**;
-2. lê arquivos CSV com **Pandas**;
-3. transforma o conteúdo em objetos `Document` do **LangChain**;
-4. divide documentos em trechos com `RecursiveCharacterTextSplitter`;
+1. lê PDF com **PyPDF**;
+2. lê CSV com **Pandas**;
+3. transforma o conteúdo em `Document` do **LangChain**;
+4. divide documentos com `RecursiveCharacterTextSplitter`;
 5. indexa os trechos usando **TF-IDF local**;
-6. compara a pergunta com a base de conhecimento;
+6. compara a pergunta com a base;
 7. recupera os trechos mais relevantes;
-8. gera uma resposta fundamentada;
-9. apresenta as fontes utilizadas;
-10. recusa perguntas quando não existe informação suficiente na documentação.
+8. gera resposta fundamentada;
+9. mostra as fontes utilizadas;
+10. recusa a pergunta quando não há informação suficiente.
 
 ## 🏗️ Arquitetura
 
 ```text
-          DOCUMENTAÇÃO CORPORATIVA
-        PDF                     CSV
-         |                       |
-         v                       v
-      PyPDF                   Pandas
-         \                       /
-          \                     /
-           v                   v
-              LangChain Document
-                       |
-                       v
-          RecursiveCharacterTextSplitter
-                       |
-                       v
-                 Chunks de texto
-                       |
-                       v
-               Índice TF-IDF local
-                       |
-                       v
-                    Retriever
-                       |
-                       v
-              FashionStoreAgent
-                 /           \
-                /             \
-      resposta + fontes     recusa fora da base
-                       |
-                       v
-                    FastAPI
-                 /      |      \
-                /       |       \
-          Interface   /api/ask  /health
+PDF ──PyPDF──┐
+             ├─> LangChain Documents -> Chunks -> TF-IDF -> Retriever
+CSV ─Pandas──┘                                      |
+                                                     v
+                                            FashionStoreAgent
+                                               /          \
+                                      resposta+fontes   recusa
+                                               |
+                                               v
+                                             FastAPI
 ```
 
-Uma descrição detalhada também está disponível em `ARQUITETURA.md`.
+Detalhes adicionais: [`ARQUITETURA.md`](ARQUITETURA.md).
 
-## 🛠️ Tecnologias e ferramentas
+## 🛠️ Tecnologias
 
-- **Python** — linguagem principal;
-- **LangChain** — representação e divisão da documentação;
-- **Pandas** — leitura e processamento dos documentos CSV;
-- **PyPDF** — extração de conteúdo dos PDFs;
-- **TF-IDF** — recuperação e ranqueamento documental local;
-- **FastAPI** — aplicação web e API REST;
-- **Uvicorn** — servidor ASGI;
-- **Pytest** — testes automatizados;
-- **GitHub Actions** — integração contínua;
-- **Docker / Docker Compose** — empacotamento e execução;
-- **OCI Compute** — configuração de deploy em Oracle Cloud;
-- **Render** — alternativa de deploy em nuvem.
+`Python` · `FastAPI` · `LangChain` · `Pandas` · `PyPDF` · `TF-IDF` · `Uvicorn` · `Pytest` · `GitHub Actions` · `Docker` · `Docker Compose`
 
-## 💬 Exemplos de perguntas e respostas
+## 💬 Exemplos
 
-### 1. Devolução
+### Devolução
 
-**Pergunta:**
+**Pergunta:** `Qual é o prazo para devolver uma roupa?`
 
-```text
-Qual é o prazo para devolver uma roupa?
-```
+**Resposta esperada:** você pode solicitar a devolução em até **10 dias corridos após o recebimento**, e o produto deve estar em perfeitas condições, sem sinais de uso, lavagem, odores, danos ou alterações, com etiquetas e acessórios originais.
 
-**Resposta:**
+### Pagamento
 
-```text
-Você pode solicitar a devolução em até 10 dias corridos após o recebimento. O produto deve estar em perfeitas condições, sem sinais de uso, lavagem, odores, danos ou alterações, com etiquetas e acessórios originais.
-```
+**Pergunta:** `Quais formas de pagamento são aceitas?`
 
-### 2. Pagamento
+**Resposta esperada:** cartão de crédito e PIX.
 
-**Pergunta:**
+### Entrega
 
-```text
-Quais formas de pagamento são aceitas?
-```
+**Pergunta:** `Quando começa a contar o prazo de entrega?`
 
-**Resposta:**
+**Resposta esperada:** após a confirmação do pagamento, variando conforme CEP, modalidade de frete e transportadora.
 
-```text
-A Aurora Moda Online aceita cartão de crédito e PIX. A confirmação do pedido ocorre após a aprovação do pagamento.
-```
+### Privacidade
 
-### 3. Entrega
+**Pergunta:** `Como meus dados pessoais são usados?`
 
-**Pergunta:**
+**Resposta esperada:** para cadastro, pedido, pagamento, entrega, atendimento, segurança e obrigações legais, com medidas de proteção.
 
-```text
-Quando começa a contar o prazo de entrega?
-```
+### Fora da documentação
 
-**Resposta:**
+**Pergunta:** `Qual é a capital da Austrália?`
 
-```text
-O prazo de entrega começa a contar após a confirmação do pagamento e pode variar conforme CEP, modalidade de frete e transportadora.
-```
+**Resposta:** `Não encontrei essa informação na documentação oficial da Aurora Moda Online.`
 
-### 4. Privacidade
-
-**Pergunta:**
-
-```text
-Como meus dados pessoais são usados?
-```
-
-**Resposta:**
-
-```text
-Os dados são utilizados para cadastro, processamento de pedidos, pagamento, entrega, atendimento, segurança e cumprimento de obrigações legais, com medidas técnicas e administrativas de proteção.
-```
-
-### 5. Pergunta fora da documentação
-
-**Pergunta:**
-
-```text
-Qual é a capital da Austrália?
-```
-
-**Resposta:**
-
-```text
-Não encontrei essa informação na documentação oficial da Aurora Moda Online. Entre em contato com o suporte para obter orientação adicional.
-```
-
-## 🧪 Testes automatizados
-
-O projeto contém testes em `tests/test_agent.py` que validam, entre outros pontos:
-
-- prazo de devolução de 10 dias;
-- métodos de pagamento;
-- resposta sobre privacidade;
-- recusa de perguntas fora da base documental.
-
-Para executar manualmente:
+## 🧪 Testes
 
 ```bash
 python -m pytest -q
 ```
 
-No Windows, o próprio `INICIAR_WINDOWS.bat` executa os testes antes de iniciar a aplicação.
+Os testes cobrem devolução, pagamentos, privacidade, perguntas fora da base e health check. No Windows, `INICIAR_WINDOWS.bat` executa os testes antes de iniciar a aplicação.
 
 ## 🔌 Endpoints
 
-### Interface principal
+| Endpoint | Função |
+| --- | --- |
+| `GET /` | interface principal |
+| `POST /api/ask` | pergunta ao agente |
+| `GET /health` | saúde da aplicação |
 
-```text
-GET /
-```
-
-### Fazer pergunta ao agente
-
-```text
-POST /api/ask
-```
-
-### Verificar saúde da aplicação
-
-```text
-GET /health
-```
-
-## 📁 Estrutura do repositório
+## 📁 Estrutura
 
 ```text
 Projeto/
 ├── .github/workflows/ci.yml
 ├── app/
-│   ├── __init__.py
 │   ├── agent.py
 │   └── main.py
+├── demo/
+│   └── index.html
 ├── deploy/
-│   ├── OCI_DEPLOY.md
-│   ├── RENDER_DEPLOY.md
-│   └── oci_compute.sh
 ├── docs/
 │   ├── faq.csv
 │   ├── faq.pdf
 │   ├── politica_privacidade.pdf
 │   └── politica_reembolso_devolucoes.pdf
 ├── tests/
-│   └── test_agent.py
-├── .env.example
-├── .gitignore
 ├── ARQUITETURA.md
 ├── DIAGNOSTICO_WINDOWS.bat
 ├── Dockerfile
 ├── docker-compose.yml
 ├── INICIAR_WINDOWS.bat
-├── README.md
 ├── render.yaml
 └── requirements.txt
 ```
 
-## 🖥️ Execução manual — alternativa
-
-A execução manual é apenas uma alternativa ao `INICIAR_WINDOWS.bat`.
+## 🖥️ Execução manual
 
 ### Windows
 
@@ -313,71 +196,31 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 ## 🐳 Docker
 
 ```bash
-docker build -t aurora-moda-agente .
-docker run --rm -p 8000:8000 aurora-moda-agente
-```
-
-Ou:
-
-```bash
 docker compose up --build
 ```
 
 ## ☁️ Deploy
 
-### OCI Compute
-
-O projeto inclui um guia e um script prontos para Oracle Cloud Infrastructure:
-
-```text
-deploy/OCI_DEPLOY.md
-deploy/oci_compute.sh
-```
-
-### Alternativa: Render
-
-Quando não houver conta OCI disponível, o repositório possui:
-
-```text
-render.yaml
-deploy/RENDER_DEPLOY.md
-```
-
-A evidência de um deploy real em nuvem deve ser produzida somente após a publicação efetiva da aplicação; o projeto não utiliza prints ou URLs fictícias.
+O repositório mantém guias para OCI Compute e Render em `deploy/`. A demo pública existe para avaliação imediata do produto; um deploy real de backend deve ser documentado somente quando efetivamente publicado.
 
 ## 📝 Histórico de desenvolvimento
 
-O repositório utiliza commits separados e descritivos para registrar a evolução do projeto, incluindo etapas como:
+O histórico Git registra etapas separadas de implementação, documentação, compatibilidade Windows/Python 3.14, base documental, Docker, testes/CI, correções e criação da demo pública. Isso preserva a evolução do projeto em vez de apresentar um único upload final.
 
-- criação inicial e documentação;
-- implementação do agente;
-- interface FastAPI;
-- base de conhecimento;
-- Docker e configuração de deploy;
-- compatibilidade com Windows/Python 3.14;
-- inclusão dos PDFs corporativos;
-- correção e estabilização do agente;
-- testes automatizados e CI;
-- documentação final de entrega.
+## ✅ Challenge Alura — requisitos atendidos
 
-Isso permite que o histórico do Git demonstre o desenvolvimento progressivo da solução, conforme solicitado no Challenge.
-
-## ✅ Requisitos do Challenge atendidos
-
-- [x] contexto empresarial real: loja de roupas online;
-- [x] repositório público no GitHub;
-- [x] histórico de commits de desenvolvimento;
-- [x] estrutura organizada;
+- [x] contexto empresarial real;
+- [x] repositório público e organizado;
+- [x] histórico de commits;
 - [x] README com descrição, arquitetura, tecnologias e execução;
 - [x] exemplos de perguntas e respostas;
-- [x] agente inteligente funcional;
-- [x] leitura e processamento de PDF;
-- [x] leitura e processamento de CSV com Pandas;
-- [x] uso de LangChain no pipeline documental;
-- [x] respostas fundamentadas exclusivamente na documentação;
-- [x] testes automatizados;
-- [x] aplicação web funcional;
-- [x] Docker e preparação para deploy em nuvem.
+- [x] agente funcional;
+- [x] leitura de PDF e CSV;
+- [x] Pandas e LangChain no pipeline;
+- [x] respostas limitadas à documentação;
+- [x] testes automatizados e CI;
+- [x] aplicação web e Docker;
+- [x] demo pública navegável sem instalação.
 
 ---
 
