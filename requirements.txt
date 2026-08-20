@@ -1,10 +1,12 @@
-fastapi==0.115.6
-uvicorn[standard]==0.34.0
-pandas==2.2.3
-pypdf==5.1.0
-scikit-learn==1.6.0
-numpy==2.2.1
-python-multipart==0.0.20
-langchain==0.3.14
-langchain-community==0.3.14
-langchain-text-splitters==0.3.5
+# Compatível com Python 3.12, 3.13 e 3.14.
+# Evitamos pins antigos que não possuem wheels para Python 3.14 no Windows.
+fastapi>=0.115.6,<1.0
+uvicorn[standard]>=0.34.0,<1.0
+pandas>=3.0.5,<4.0
+pypdf>=5.1.0,<7.0
+# Mantido por compatibilidade com a versão publicada no GitHub; o agente local corrigido não depende dele.
+scikit-learn>=1.9.0,<2.0
+python-multipart>=0.0.20,<1.0
+langchain>=1.3.14,<2.0
+langchain-text-splitters>=1.0.0,<2.0
+pytest>=8.3,<10.0
