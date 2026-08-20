@@ -1,5 +1,7 @@
 from pathlib import Path
+
 from app.agent import FashionStoreAgent
+from app.main import health
 
 ROOT = Path(__file__).resolve().parents[1]
 agent = FashionStoreAgent(ROOT / "docs")
@@ -20,3 +22,11 @@ def test_privacy():
 
 def test_out_of_scope():
     assert "não encontrei" in agent.answer("Qual é a capital da Austrália?")["answer"].lower()
+
+
+def test_health_endpoint():
+    result = health()
+    assert result["status"] == "ok"
+    assert result["documents"] > 0
+    assert result["chunks"] > 0
+    assert isinstance(result["langchain_available"], bool)
