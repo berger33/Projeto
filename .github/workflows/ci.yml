@@ -22,7 +22,9 @@ jobs:
       - name: Compile Python
         run: python -m compileall -q app tests
       - name: Run unit API and behavior tests
-        run: pytest -q
+        env:
+          PYTHONPATH: .
+        run: python -m pytest -q
       - name: Validate eval JSON
         run: python -m json.tool evals/cases.json >/dev/null
       - name: Check whitespace
