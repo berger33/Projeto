@@ -2,7 +2,7 @@
 
 **Python backend para atendimento documental com FastAPI, retrieval vetorial, geração local opcional e citações rastreáveis.**
 
-[![CI](https://github.com/berger33/Projeto/actions/workflows/ci.yml/badge.svg)](https://github.com/berger33/Projeto/actions/workflows/ci.yml)
+[![CI](https://github.com/berger33/aurora-document-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/berger33/aurora-document-rag/actions/workflows/ci.yml)
 
 > Projeto acadêmico do Challenge Alura, reestruturado como case de backend e IA aplicada. O objetivo é responder perguntas sobre políticas da Aurora Moda Online usando somente os documentos do repositório — e recusar quando não houver evidência suficiente.
 
