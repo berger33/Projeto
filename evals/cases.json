@@ -1,0 +1,5 @@
+[
+  {"id":"payment","question":"Quais formas de pagamento são aceitas?","must_contain":["PIX","cartão"],"expects_sources":true},
+  {"id":"returns","question":"Qual é o prazo para devolver uma compra?","must_contain":["10 dias"],"expects_sources":true},
+  {"id":"out_of_scope","question":"Qual é a capital da Austrália?","must_contain":["não encontrei"],"expects_sources":false}
+]
