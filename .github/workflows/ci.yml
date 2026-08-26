@@ -2,7 +2,11 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
+
+permissions:
+  contents: read
 
 jobs:
   test:
@@ -12,7 +16,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
       - name: Install dependencies
-        run: pip install -r requirements.txt
-      - name: Run tests
-        run: pytest -q
+        run: python -m pip install -r requirements.txt
+      - name: Compile Python
+        run: python -m compileall -q app tests
+      - name: Run unit API and behavior tests
+        env:
+          PYTHONPATH: .
+        run: python -m pytest -q
+      - name: Validate eval JSON
+        run: python -m json.tool evals/cases.json >/dev/null
+      - name: Check whitespace
+        run: git diff --check
