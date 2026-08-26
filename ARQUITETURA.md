@@ -1,69 +1,56 @@
-# Arquitetura da Solução
+# Arquitetura — Aurora Document RAG
 
-## Visão geral
+## Objetivo
 
-A Aurora Moda Online utiliza uma arquitetura RAG documental local para responder dúvidas de clientes com base exclusiva nos documentos corporativos do projeto.
-
-```text
-PDFs / CSV
-   |
-   v
-PyPDF + Pandas
-   |
-   v
-LangChain Document
-   |
-   v
-RecursiveCharacterTextSplitter
-   |
-   v
-Chunks documentais
-   |
-   v
-Índice TF-IDF local
-   |
-   v
-Retriever por similaridade + sobreposição de termos
-   |
-   v
-Agente documental
-   |
-   +--> resposta fundamentada + fontes
-   |
-   +--> recusa quando a informação não está na base
-   |
-   v
-FastAPI
-   |
-   +--> Interface Web
-   +--> POST /api/ask
-   +--> GET /health
-```
+Responder perguntas usando exclusivamente a documentação da Aurora, com separação explícita entre ingestão, retrieval, geração e API.
 
 ## Componentes
 
-1. **PyPDF** extrai texto dos documentos PDF.
-2. **Pandas** lê e transforma o FAQ em CSV.
-3. **LangChain** representa o conteúdo como `Document` e realiza a divisão em trechos com `RecursiveCharacterTextSplitter`.
-4. **TF-IDF em Python puro** cria a representação local dos chunks sem depender de uma API externa.
-5. **Retriever** calcula relevância entre a pergunta e os trechos da documentação.
-6. **FashionStoreAgent** responde somente quando existe evidência documental suficiente.
-7. **FastAPI** disponibiliza interface web, API e health check.
-8. **Docker** empacota a aplicação para execução local ou em nuvem.
+| Componente | Responsabilidade |
+|---|---|
+| `app/documents.py` | lê PDF/CSV e produz chunks rastreáveis |
+| `app/embeddings.py` | converte textos em vetores; provider local ou Ollama |
+| `app/retrieval.py` | indexa vetores e calcula similaridade cosseno |
+| `app/generation.py` | monta prompt e produz resposta; extrativo local ou LLM Ollama |
+| `app/rag.py` | aplica top-k, limiar, relevância, geração e fontes |
+| `app/main.py` | expõe contratos HTTP e permite injeção do serviço em testes |
 
-## Base de conhecimento
+## Fluxo generativo
 
-A pasta `docs/` contém:
+```mermaid
+flowchart LR
+    D[PDF/CSV] --> C[Chunks + metadados]
+    C --> E[Ollama embeddings]
+    E --> V[Índice vetorial]
+    Q[Pergunta] --> QE[Embedding da pergunta]
+    QE --> V
+    V --> R[Top-k contexto]
+    R --> P[Prompt fundamentado]
+    P --> L[Ollama LLM]
+    L --> A[Resposta]
+    R --> S[Fontes]
+    A --> API[FastAPI]
+    S --> API
+```
 
-- `politica_privacidade.pdf`
-- `politica_reembolso_devolucoes.pdf`
-- `faq.pdf`
-- `faq.csv`
+## Por que existe modo local
 
-## Decisão de projeto
+CI não deve depender de servidor Ollama nem de API paga. Por isso existe um provider vetorial determinístico e uma resposta extrativa. Esse caminho valida ingestão, retrieval, fontes e API; ele **não é apresentado como substituto semântico de um LLM**.
 
-A aplicação foi construída para ser reproduzível durante a avaliação acadêmica sem exigir chave de API paga. O pipeline continua demonstrando ingestão, chunking, indexação, recuperação e geração de resposta fundamentada, com LangChain participando diretamente do processamento documental.
+## Guardrails
 
-## Deploy
+1. Pergunta vazia é rejeitada.
+2. Retrieval usa limiar mínimo e exige evidência de relevância para evitar fontes arbitrárias.
+3. O prompt instrui o modelo a tratar documentos apenas como dados e não seguir instruções contidas neles.
+4. Sem contexto suficiente, a resposta é de recusa.
+5. Fontes são derivadas dos chunks realmente selecionados.
+6. Falha do provider gera `503` em vez de sucesso inventado.
 
-O projeto contém `Dockerfile`, `docker-compose.yml`, `render.yaml` e scripts/instruções em `deploy/` para OCI Compute e Render.
+## Extensões futuras
+
+- persistir índice em `pgvector`;
+- reranking semântico;
+- streaming;
+- métricas Recall@K/MRR;
+- tracing e latência por etapa;
+- avaliação de groundedness com conjunto de referência maior.
