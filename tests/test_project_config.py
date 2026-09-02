@@ -102,3 +102,51 @@ def test_lockfile_covers_all_declared_dependencies(pyproject: dict, lock: dict) 
     declared |= _requirement_names("\n".join(pyproject["dependency-groups"]["dev"]))
     missing = {name for name in declared if name not in locked}
     assert not missing, f"dependências declaradas sem entrada no uv.lock: {missing}"
+
+
+# ---------------------------------------------------------------------------
+# P3-01: CI completa (G-22)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def ci_workflow() -> str:
+    return (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+
+
+def test_ci_runs_full_matrix_and_all_quality_gates(ci_workflow: str) -> None:
+    assert 'python-version: ["3.11", "3.12", "3.13"]' in ci_workflow
+    for step in (
+        "ruff check app evals tests",
+        "ruff format --check app evals tests",
+        "mypy app evals",
+        "coverage run -m pytest -q",
+        "coverage report",
+        "pip-audit -r requirements.txt",
+        "uv lock --check",
+        "docker build -t aurora-document-rag:ci .",
+        "python -m evals.run --mode local",
+        "python -m app.ingest --index-dir /tmp/ci-index --check",
+    ):
+        assert step in ci_workflow, step
+
+
+def test_ci_whitespace_check_compares_against_pr_base(ci_workflow: str) -> None:
+    """G-22: o passo antigo de whitespace era um no-op (comparava HEAD com HEAD)."""
+    assert 'git diff --check "origin/${{ github.base_ref }}...HEAD"' in ci_workflow
+    assert "fetch-depth: 0" in ci_workflow
+
+
+def test_ci_docker_job_boots_container_and_probes_ready(ci_workflow: str) -> None:
+    assert "docker run -d --name aurora" in ci_workflow
+    assert "curl -fsS http://127.0.0.1:8000/ready" in ci_workflow
+    assert '"status":"answered"' in ci_workflow
+
+
+def test_mypy_is_strict_over_app_and_evals(pyproject: dict) -> None:
+    mypy = pyproject["tool"]["mypy"]
+    assert mypy["strict"] is True and set(mypy["files"]) == {"app", "evals"}
+
+
+def test_coverage_floor_is_at_least_85(pyproject: dict) -> None:
+    assert pyproject["tool"]["coverage"]["report"]["fail_under"] >= 85

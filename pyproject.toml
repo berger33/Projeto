@@ -86,7 +86,7 @@ quote-style = "double"
 
 [tool.mypy]
 python_version = "3.11"
-files = ["app"]
+files = ["app", "evals"]
 strict = true
 warn_unreachable = true
 pretty = true
