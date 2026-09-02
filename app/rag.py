@@ -21,6 +21,7 @@ from .generation import AnswerGenerator, ExtractiveGenerator, OllamaGenerator, P
 from .observability import Timings, get_request_id, log_event, request_context
 from .persistence import IndexBuilder
 from .refusal import judge
+from .rerank import build_reranker
 from .retriever import HybridRetriever, RetrieverConfig
 from .sources import derive_sources, strip_citations
 
@@ -74,7 +75,9 @@ class RAGService:
                     vector_only_min_score=thresholds.vector_only_min_score,
                     vector_with_overlap_min_score=thresholds.vector_with_overlap_min_score,
                     min_lexical_coverage=thresholds.min_lexical_coverage,
+                    mmr_lambda=thresholds.mmr_lambda,
                 ),
+                reranker=build_reranker(settings.reranker),
             )
         except Exception as exc:
             log_event(
@@ -120,7 +123,7 @@ class RAGService:
         build = IndexBuilder(
             self.docs_dir, self.settings, self.index.embeddings, index_dir=self.index_dir
         ).load_or_build(force=True)
-        retriever = HybridRetriever(build.chunks, build.index, self.retriever.config)
+        retriever = HybridRetriever(build.chunks, build.index, self.retriever.config, reranker=self.retriever.reranker)
         self.index, self.retriever, self.ingest_report, self.manifest = (
             build.index,
             retriever,
@@ -176,11 +179,7 @@ class RAGService:
         with timings.stage("retrieve"):
             fused = self.retriever.fuse(question)
         with timings.stage("filter"):
-            selected = [
-                RetrievedChunk(chunk=item.chunk, score=item.vector_score)
-                for item in fused
-                if self.retriever.accepts(item)
-            ][: self.settings.retrieval_k]
+            selected = self.retriever.select(question, fused)
         # ``candidates`` expõe o pool fundido (ordem RRF) com o cosseno como score, para diagnóstico/eval.
         candidates = [RetrievedChunk(chunk=item.chunk, score=item.vector_score) for item in fused]
         log_event(

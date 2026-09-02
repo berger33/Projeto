@@ -45,6 +45,7 @@ class RetrievalThresholds:
     min_lexical_coverage: float
     high_confidence_score: float  # top-1 acima disto (com gap/concordância) => "alta"
     relative_gap: float  # (top1 - top2) / top1 mínimo para considerar o top-1 destacado
+    mmr_lambda: float = 1.0  # diversificação MMR dos aprovados (1.0 = desligada)
 
 
 # Perfis calibrados (ver evals/thresholds.json → "profiles"; mantidos aqui como fonte da verdade em código).
@@ -56,6 +57,9 @@ THRESHOLD_PROFILES: dict[str, RetrievalThresholds] = {
         min_lexical_coverage=0.2,
         high_confidence_score=0.45,
         relative_gap=0.15,
+        # Eval local (P2-05): MMR 0,7 dá +2,2 p.p. de selected recall mas -6,7 p.p. de precisão de fontes
+        # com o hash (cosseno entre chunks é ruidoso) → desligado neste perfil.
+        mmr_lambda=1.0,
     ),
     # Provisório até haver medição com o modelo real (P1-06 registra a dúvida; calibrar com
     # `python -m evals.calibrate --mode ollama` assim que houver Ollama disponível).
@@ -66,6 +70,7 @@ THRESHOLD_PROFILES: dict[str, RetrievalThresholds] = {
         min_lexical_coverage=0.2,
         high_confidence_score=0.7,
         relative_gap=0.1,
+        mmr_lambda=0.7,  # embeddings densos: quase-duplicatas reais (faq.csv x faq.pdf) têm cosseno alto
     ),
 }
 
@@ -90,6 +95,9 @@ class Settings:
     # Janela de contexto e limite de geração enviados ao Ollama (options.num_ctx / num_predict).
     num_ctx: int = 4096
     num_predict: int = 300
+    # Diversificação MMR dos trechos aprovados (0..1; 1 desliga): None = perfil do modo. Reranker opcional.
+    mmr_lambda: float | None = None
+    reranker: str = "noop"
     # Diretório do índice persistido (.npy + manifest). "" desabilita a persistência (reembeda a cada boot).
     # O default lê RAG_INDEX_DIR mesmo em construção direta, para que testes/CLIs isolem o índice.
     index_dir: str = field(default_factory=lambda: _read_index_dir(os.environ))
@@ -130,6 +138,10 @@ class Settings:
             errors.append(
                 f"OLLAMA_EMBED_BATCH_SIZE={self.embed_batch_size!r}: faixa aceita {BATCH_SIZE_RANGE[0]}..{BATCH_SIZE_RANGE[1]}"
             )
+        if self.mmr_lambda is not None and (not _is_number(self.mmr_lambda) or not 0.0 <= self.mmr_lambda <= 1.0):
+            errors.append(f"RAG_MMR_LAMBDA={self.mmr_lambda!r}: faixa aceita 0.0..1.0")
+        if not self.reranker.strip():
+            errors.append("RAG_RERANKER: não pode ser vazio (use 'noop')")
         for env_name, value, bounds in (
             ("OLLAMA_NUM_CTX", self.num_ctx, NUM_CTX_RANGE),
             ("OLLAMA_NUM_PREDICT", self.num_predict, NUM_PREDICT_RANGE),
@@ -185,6 +197,8 @@ class Settings:
             embed_batch_size=_parse_int("OLLAMA_EMBED_BATCH_SIZE", read("OLLAMA_EMBED_BATCH_SIZE", "32")),
             num_ctx=_parse_int("OLLAMA_NUM_CTX", read("OLLAMA_NUM_CTX", "4096")),
             num_predict=_parse_int("OLLAMA_NUM_PREDICT", read("OLLAMA_NUM_PREDICT", "300")),
+            mmr_lambda=_parse_optional_float("RAG_MMR_LAMBDA", env),
+            reranker=read("RAG_RERANKER", "noop").lower(),
             index_dir=_read_index_dir(env),
             source=source,
         )
@@ -202,6 +216,7 @@ class Settings:
                 ("min_lexical_coverage", self.min_lexical_coverage),
                 ("high_confidence_score", self.high_confidence_score),
                 ("relative_gap", self.relative_gap),
+                ("mmr_lambda", self.mmr_lambda),
             )
             if value is not None
         }
@@ -224,6 +239,7 @@ class Settings:
             "embed_batch_size": self.embed_batch_size,
             "num_ctx": self.num_ctx,
             "num_predict": self.num_predict,
+            "reranker": self.reranker,
             "index_dir": self.index_dir or None,
         }
 

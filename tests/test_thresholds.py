@@ -252,4 +252,5 @@ def test_thresholds_dataclass_is_frozen_and_complete() -> None:
         "min_lexical_coverage",
         "high_confidence_score",
         "relative_gap",
+        "mmr_lambda",
     }

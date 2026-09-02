@@ -64,14 +64,15 @@
     }
   },
   "profiles": {
-    "_comment": "Espelho de app.config.THRESHOLD_PROFILES (tests/test_thresholds.py garante igualdade). 'local' calibrado por `python -m evals.calibrate` em 2026-09-02 (600 combinações; perfil na fronteira: recusa correta 100 %, indevida 5 %; cosseno top-1 in_scope mediana 0,41 / out_of_scope máx 0,41). 'ollama' é PROVISÓRIO: derivado da escala típica de cosseno de modelos densos, sem medição real — DÚVIDA registrada: calibrar com `python -m evals.calibrate --mode ollama` assim que houver servidor Ollama com nomic-embed-text-v2-moe disponível.",
+    "_comment": "Espelho de app.config.THRESHOLD_PROFILES (tests/test_thresholds.py garante igualdade). 'local' calibrado por `python -m evals.calibrate` em 2026-09-02 (600 combinações; perfil na fronteira: recusa correta 100 %, indevida 5 %; cosseno top-1 in_scope mediana 0,41 / out_of_scope máx 0,41). 'ollama' é PROVISÓRIO: derivado da escala típica de cosseno de modelos densos, sem medição real — DÚVIDA registrada: calibrar com `python -m evals.calibrate --mode ollama` assim que houver servidor Ollama com nomic-embed-text-v2-moe disponível. mmr_lambda (P2-05): local 1.0 (eval: MMR 0,7 = +2,2 p.p. selected recall, -6,7 p.p. precisão de fontes com hash); ollama 0,7 provisório.",
     "local": {
       "min_score": 0.12,
       "vector_only_min_score": 0.5,
       "vector_with_overlap_min_score": 0.35,
       "min_lexical_coverage": 0.2,
       "high_confidence_score": 0.45,
-      "relative_gap": 0.15
+      "relative_gap": 0.15,
+      "mmr_lambda": 1.0
     },
     "ollama": {
       "min_score": 0.35,
@@ -79,7 +80,8 @@
       "vector_with_overlap_min_score": 0.5,
       "min_lexical_coverage": 0.2,
       "high_confidence_score": 0.7,
-      "relative_gap": 0.1
+      "relative_gap": 0.1,
+      "mmr_lambda": 0.7
     }
   }
 }

@@ -21,9 +21,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import numpy as np
+from numpy.typing import NDArray
+
 from .domain import Chunk, RetrievedChunk
 from .lexical import BM25Index
+from .rerank import NoopReranker, Reranker, mmr
 from .retrieval import VectorIndex
+from .store import NumpyVectorStore
 
 
 @dataclass(frozen=True)
@@ -56,14 +61,24 @@ class RetrieverConfig:
     vector_with_overlap_min_score: float = 0.35
     lexical_weight: float = 1.0
     vector_weight: float = 1.0
+    # Diversificação MMR sobre os aprovados (1.0 = desligada; 0.7 = relevância pesa 70 %). Default por perfil.
+    mmr_lambda: float = 1.0
 
 
 class HybridRetriever:
-    def __init__(self, chunks: list[Chunk], vector_index: VectorIndex, config: RetrieverConfig | None = None) -> None:
+    def __init__(
+        self,
+        chunks: list[Chunk],
+        vector_index: VectorIndex,
+        config: RetrieverConfig | None = None,
+        *,
+        reranker: Reranker | None = None,
+    ) -> None:
         self.chunks = chunks
         self.vector_index = vector_index
         self.lexical_index = BM25Index([chunk.text for chunk in chunks])
         self.config = config or RetrieverConfig()
+        self.reranker: Reranker = reranker or NoopReranker()
         self._position = {chunk.id: index for index, chunk in enumerate(chunks)}
 
     # ----- canais -----
@@ -119,10 +134,30 @@ class HybridRetriever:
             return True
         return candidate.vector_score >= config.vector_only_min_score
 
+    def select(self, query: str, fused: list[ScoredCandidate]) -> list[RetrievedChunk]:
+        """Filtra o pool fundido, diversifica por MMR e aplica o reranker; devolve no máximo ``k``."""
+        approved = [RetrievedChunk(chunk=item.chunk, score=item.vector_score) for item in fused if self.accepts(item)]
+        if not approved:
+            return []
+        approved_fused = [item.fused_score for item in fused if self.accepts(item)]
+        # Relevância para o MMR = score de fusão (RRF), que já combina os dois canais; o cosseno segue
+        # como ``score`` do RetrievedChunk para limiares e confiança.
+        if self.config.mmr_lambda < 1.0 and len(approved) > 1:
+            vectors = self._vectors_for(approved)
+            approved = mmr(approved, vectors, k=len(approved), lambda_=self.config.mmr_lambda, relevance=approved_fused)
+        return self.reranker.rerank(query, approved, k=self.config.k)
+
+    def _vectors_for(self, items: list[RetrievedChunk]) -> list[NDArray[np.float32]]:
+        store = self.vector_index.store
+        if isinstance(store, NumpyVectorStore):
+            return [store.matrix[self._position[item.chunk.id]] for item in items]
+        # Backend sem acesso direto à matriz: recorre ao provider (custo de embed por chunk).
+        return [
+            np.asarray(vector, dtype=np.float32)
+            for vector in self.vector_index.embeddings.embed_documents([item.chunk.text for item in items])
+        ]
+
     def retrieve(self, query: str) -> tuple[list[ScoredCandidate], list[RetrievedChunk]]:
-        """``(candidatos fundidos, selecionados)`` — selecionados já filtrados e cortados em ``k``."""
+        """``(candidatos fundidos, selecionados)`` — selecionados filtrados, diversificados e cortados em ``k``."""
         candidates = self.fuse(query)
-        selected = [
-            RetrievedChunk(chunk=item.chunk, score=item.vector_score) for item in candidates if self.accepts(item)
-        ][: self.config.k]
-        return candidates, selected
+        return candidates, self.select(query, candidates)
