@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import re
 import time
 from pathlib import Path
 
@@ -24,39 +23,11 @@ from .generation import AnswerGenerator, ExtractiveGenerator, OllamaGenerator
 from .observability import Timings, get_request_id, log_event, request_context
 from .refusal import judge
 from .retrieval import VectorIndex
+from .retriever import HybridRetriever, RetrieverConfig
 
 __all__ = ["REFUSAL_TEXT", "RAGService"]
 
 logger = logging.getLogger(__name__)
-
-STOPWORDS = {
-    "qual",
-    "quais",
-    "como",
-    "para",
-    "com",
-    "uma",
-    "uns",
-    "das",
-    "dos",
-    "que",
-    "por",
-    "ser",
-    "sao",
-    "são",
-    "esta",
-    "está",
-    "meu",
-    "minha",
-}
-
-
-def _terms(text: str) -> set[str]:
-    return {
-        token.lower()
-        for token in re.findall(r"[a-zA-ZÀ-ÿ0-9]+", text)
-        if len(token) > 2 and token.lower() not in STOPWORDS
-    }
 
 
 class RAGService:
@@ -83,6 +54,15 @@ class RAGService:
                 generator = ExtractiveGenerator()
             self.generator = generator
             self.index = VectorIndex(chunks, embeddings)
+            self.retriever = HybridRetriever(
+                chunks,
+                self.index,
+                RetrieverConfig(
+                    k=settings.retrieval_k,
+                    min_score=settings.min_score,
+                    vector_only_min_score=settings.vector_only_min_score,
+                ),
+            )
         except Exception as exc:
             log_event(
                 logger,
@@ -150,14 +130,15 @@ class RAGService:
 
     def _retrieve(self, question: str, timings: Timings) -> Retrieval:
         with timings.stage("retrieve"):
-            candidates = self.index.search(question, k=self.settings.retrieval_k)
+            fused = self.retriever.fuse(question)
         with timings.stage("filter"):
-            question_terms = _terms(question)
             selected = [
-                item
-                for item in candidates
-                if item.score >= self.settings.min_score and question_terms & _terms(item.chunk.text)
-            ]
+                RetrievedChunk(chunk=item.chunk, score=item.vector_score)
+                for item in fused
+                if self.retriever.accepts(item)
+            ][: self.settings.retrieval_k]
+        # ``candidates`` expõe o pool fundido (ordem RRF) com o cosseno como score, para diagnóstico/eval.
+        candidates = [RetrievedChunk(chunk=item.chunk, score=item.vector_score) for item in fused]
         log_event(
             logger,
             logging.INFO,
@@ -165,7 +146,19 @@ class RAGService:
             question_chars=len(question),
             k=self.settings.retrieval_k,
             min_score=self.settings.min_score,
-            candidates=[{"id": item.chunk.id, "score": round(item.score, 4)} for item in candidates],
+            pool=len(fused),
+            candidates=[
+                {
+                    "id": item.chunk.id,
+                    "score": round(item.vector_score, 4),
+                    "vector_rank": item.vector_rank,
+                    "lexical_rank": item.lexical_rank,
+                    "overlap": item.lexical_overlap,
+                    "coverage": item.lexical_coverage,
+                    "rrf": round(item.fused_score, 5),
+                }
+                for item in fused[: self.settings.retrieval_k * 2]
+            ],
             selected=[item.chunk.id for item in selected],
         )
         return Retrieval(candidates=candidates, selected=selected)

@@ -34,18 +34,24 @@ class VectorIndex:
             )
         self.dimension = dimensions.pop()
 
-    def search(self, query: str, *, k: int = 5) -> list[RetrievedChunk]:
+    def scores(self, query: str) -> list[float]:
+        """Cosseno entre a consulta e **todos** os chunks, na ordem do índice."""
         query = query.strip()
         if not query:
-            return []
+            return [0.0] * len(self.chunks)
         query_vector = self.embeddings.embed_query(query)
         if len(query_vector) != self.dimension:
             raise RuntimeError(
                 f"Embedding da consulta tem dimensão {len(query_vector)}; o índice foi construído com {self.dimension}."
             )
+        return [float(cosine_similarity(query_vector, vector)) for vector in self.vectors]
+
+    def search(self, query: str, *, k: int = 5) -> list[RetrievedChunk]:
+        if not query.strip():
+            return []
         ranked = [
-            RetrievedChunk(chunk=chunk, score=float(cosine_similarity(query_vector, vector)))
-            for chunk, vector in zip(self.chunks, self.vectors, strict=True)
+            RetrievedChunk(chunk=chunk, score=score)
+            for chunk, score in zip(self.chunks, self.scores(query), strict=True)
         ]
         ranked.sort(key=lambda item: item.score, reverse=True)
         return ranked[: max(1, k)]

@@ -12,6 +12,8 @@ Responder perguntas usando exclusivamente a documentação da Aurora, com separa
 | `app/chunking.py` | normalização (wrap visual, hifenização, boilerplate), seções numeradas/Markdown, split hierárquico seção → parágrafo → sentença → janela com sobreposição; invariantes: máximo respeitado, sem corte intra-palavra, cobertura total |
 | `app/embeddings.py` | converte textos em vetores; provider local ou Ollama (prefixos de tarefa por família de modelo, lotes, retry, validação de dimensão) |
 | `app/retrieval.py` | indexa vetores e calcula similaridade cosseno |
+| `app/lexical.py` | BM25 próprio sobre texto normalizado (sem acentos, stopwords PT-BR, stemmer leve) |
+| `app/retriever.py` | retrieval híbrido: pool de 4·k por canal, fusão RRF, filtro com três níveis de evidência (cobertura lexical ponderada por IDF, cosseno + radical âncora, cosseno alto), corte em k |
 | `app/generation.py` | monta prompt e produz resposta; extrativo local ou LLM Ollama |
 | `app/rag.py` | aplica top-k, limiar, relevância, geração, verificação e fontes |
 | `app/refusal.py` | decide se a saída do gerador é resposta ou recusa: declaração estruturada + classificador léxico + sustentação pelo contexto |
@@ -32,7 +34,11 @@ flowchart LR
     E --> V[Índice vetorial]
     Q[Pergunta] --> QE[Embedding da pergunta]
     QE --> V
-    V --> R[Top-k contexto]
+    Q --> B[BM25 normalizado PT-BR]
+    C --> B
+    V --> F[Fusão RRF + filtros de evidência]
+    B --> F
+    F --> R[Top-k contexto]
     R --> P[Prompt fundamentado]
     P --> L[Ollama LLM - saída JSON]
     L --> J{Verificação de recusa e sustentação}
@@ -49,7 +55,7 @@ CI não deve depender de servidor Ollama nem de API paga. Por isso existe um pro
 ## Guardrails
 
 1. Pergunta vazia é rejeitada.
-2. Retrieval usa limiar mínimo e exige evidência de relevância para evitar fontes arbitrárias.
+2. Retrieval é híbrido (vetorial + BM25 fundidos por RRF) e filtra o pool fundido — não um top-k já cortado — exigindo evidência de relevância em três níveis: cobertura lexical ponderada por IDF, ou cosseno médio com um radical em comum, ou cosseno alto. `devolucao`/`devolução`/`devoluções` são o mesmo termo.
 3. O prompt instrui o modelo a tratar documentos apenas como dados e não seguir instruções contidas neles.
 4. Sem contexto suficiente, a resposta é de recusa. A recusa do modelo é reconhecida por declaração estruturada (`grounded: false`), por padrões de múltiplas formulações em PT-BR e por verificação de sustentação (tokens de conteúdo e quantidades da resposta precisam existir no contexto) — nunca por comparação com uma frase exata.
 5. Fontes são derivadas dos chunks realmente selecionados e só são emitidas quando `status == answered`.

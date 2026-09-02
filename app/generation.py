@@ -10,6 +10,7 @@ import httpx
 
 from .domain import REFUSAL_TEXT, Generation, RetrievedChunk
 from .errors import ProviderResponseError, provider_call
+from .lexical import analyze
 from .observability import log_event, ns_to_ms
 
 logger = logging.getLogger(__name__)
@@ -165,13 +166,17 @@ class OllamaGenerator:
 
 
 class ExtractiveGenerator:
-    """Fallback offline: extrai frases do contexto, sem fingir ser LLM."""
+    """Fallback offline: extrai frases do contexto, sem fingir ser LLM.
+
+    Usa o mesmo analisador da busca lexical (normalização PT-BR + radicais), para que
+    ``cartao``/``cartão`` e ``devolucao``/``devoluções`` casem na seleção de frases (G-15).
+    """
 
     mode = "local-extractive"
 
     @staticmethod
     def _tokens(text: str) -> set[str]:
-        return {token.lower() for token in re.findall(r"[a-zA-ZÀ-ÿ0-9]+", text) if len(token) > 2}
+        return set(analyze(text))
 
     def generate(self, question: str, context: list[RetrievedChunk]) -> Generation:
         question_tokens = self._tokens(question)
