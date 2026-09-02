@@ -170,7 +170,7 @@ def test_index_error_event_is_logged_and_reraised(tmp_path: Path, captured: List
     with pytest.raises(RuntimeError):
         RAGService(tmp_path, Settings(rag_mode="local"))  # diretório sem PDF/CSV
     (event,) = captured.events("index.error")
-    assert event["error_type"] == "RuntimeError" and "exc_info" in event
+    assert event["error_type"] == "IngestError" and "exc_info" in event
 
 
 def test_answer_emits_retrieved_and_answered_events_with_stage_timings(

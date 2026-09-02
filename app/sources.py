@@ -66,7 +66,7 @@ def _ref(item: RetrievedChunk, answer: str, *, inferred: bool) -> SourceRef:
         chunk_id=item.chunk.id,
         score=round(item.score, 4),
         section=item.chunk.section,
-        excerpt=best_excerpt(item.chunk.text, answer),
+        excerpt=best_excerpt(item.chunk.content, answer),
         inferred=inferred,
     )
 

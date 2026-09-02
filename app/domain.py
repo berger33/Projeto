@@ -38,6 +38,14 @@ class Chunk:
     char_start: int | None = None
     char_end: int | None = None
     token_estimate: int | None = None
+    # Texto de exibição (P2-02): o que vai para o prompt/usuário quando difere do texto indexado
+    # (ex.: linha de CSV sem os nomes das colunas). ``None`` = usar ``text``.
+    display: str | None = None
+
+    @property
+    def content(self) -> str:
+        """Texto para o gerador e para trechos citados."""
+        return self.display if self.display is not None else self.text
 
 
 @dataclass(frozen=True)

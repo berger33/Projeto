@@ -95,7 +95,7 @@ def _source_block(number: int, item: RetrievedChunk) -> str:
     header = (
         f'<fonte n="{number}" documento="{escape_untrusted(item.chunk.source)}"{(" " + locator) if locator else ""}>'
     )
-    return f"{header}\n{escape_untrusted(item.chunk.text)}\n</fonte>"
+    return f"{header}\n{escape_untrusted(item.chunk.content)}\n</fonte>"
 
 
 def build_prompt(question: str, context: list[RetrievedChunk], budget: PromptBudget | None = None) -> BuiltPrompt:
@@ -119,9 +119,10 @@ def build_prompt(question: str, context: list[RetrievedChunk], budget: PromptBud
             continue
         if used + cost > available:
             # Nem o primeiro chunk cabe inteiro: entra truncado em palavra inteira para não perder a pergunta.
-            max_chars = max(80, int(available * budget.chars_per_token) - len(block) + len(item.chunk.text))
-            truncated = item.chunk.text[:max_chars].rsplit(" ", 1)[0] + " […]"
-            item = RetrievedChunk(chunk=replace(item.chunk, text=truncated), score=item.score)
+            content = item.chunk.content
+            max_chars = max(80, int(available * budget.chars_per_token) - len(block) + len(content))
+            truncated = content[:max_chars].rsplit(" ", 1)[0] + " […]"
+            item = RetrievedChunk(chunk=replace(item.chunk, text=truncated, display=None), score=item.score)
             block = _source_block(len(included) + 1, item)
             cost = estimate_tokens(block, budget.chars_per_token) + 1
         included.append(item)
@@ -294,7 +295,7 @@ class ExtractiveGenerator:
         question_tokens = self._tokens(question)
         candidates: list[tuple[float, int, str]] = []
         for number, item in enumerate(context, start=1):
-            for sentence in re.split(r"(?<=[.!?])\s+", item.chunk.text.replace("\n", " ")):
+            for sentence in re.split(r"(?<=[.!?])\s+", item.chunk.content.replace("\n", " ")):
                 tokens = self._tokens(sentence)
                 score = len(question_tokens & tokens) / max(1, len(question_tokens))
                 if score:

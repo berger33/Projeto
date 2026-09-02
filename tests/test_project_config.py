@@ -69,7 +69,7 @@ def test_dev_tools_are_not_runtime_dependencies(pyproject: dict) -> None:
 
 def test_exported_runtime_requirements_exclude_dev_tools() -> None:
     names = _requirement_names((ROOT / "requirements.txt").read_text(encoding="utf-8"))
-    assert {"fastapi", "uvicorn", "pypdf", "httpx", "pandas"} <= names
+    assert {"fastapi", "uvicorn", "pypdf", "httpx"} <= names
     assert not ({"pytest", "ruff", "mypy", "coverage", "pip-audit"} & names)
 
 

@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 
 from .config import Settings
-from .documents import load_chunks
+from .documents import load_corpus
 from .domain import (
     REFUSAL_TEXT,
     AnswerStatus,
@@ -36,7 +36,8 @@ class RAGService:
         self.docs_dir = Path(docs_dir)
         started = time.perf_counter()
         try:
-            chunks = load_chunks(docs_dir)
+            chunks, ingest = load_corpus(docs_dir)
+            self.ingest_report = ingest
             embeddings: EmbeddingProvider
             generator: AnswerGenerator
             if settings.rag_mode == "ollama":
@@ -89,6 +90,8 @@ class RAGService:
             mode=self.generator.mode,
             documents=len({chunk.source for chunk in chunks}),
             chunks=len(chunks),
+            duplicates_removed=len(ingest.duplicates),
+            skipped_files=ingest.skipped or None,
             dimension=self.index.dimension,
             query_prefix=embeddings.prefixes.query if isinstance(embeddings, OllamaEmbeddingProvider) else None,
             embedding_model=settings.embedding_model if settings.rag_mode == "ollama" else "hash-local",

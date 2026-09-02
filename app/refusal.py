@@ -100,7 +100,7 @@ def unsupported_numbers(answer: str, context: list[RetrievedChunk]) -> list[str]
         return []
     in_context: set[str] = set()
     for item in context:
-        in_context.update(_NUMBER_RE.findall(item.chunk.text))
+        in_context.update(_NUMBER_RE.findall(item.chunk.content))
     in_context |= {number.replace(",", ".") for number in in_context}
     return sorted(
         number for number in in_answer if number not in in_context and number.replace(",", ".") not in in_context
@@ -128,7 +128,7 @@ def support_ratio(answer: str, context: list[RetrievedChunk]) -> float | None:
         return None
     context_vocab = set()
     for item in context:
-        context_vocab.update(content_tokens(item.chunk.text))
+        context_vocab.update(content_tokens(item.chunk.content))
     if not context_vocab:
         return 0.0
     supported = sum(token in context_vocab for token in answer_tokens)

@@ -36,10 +36,6 @@ msgpack==1.2.2
 mypy==2.3.1
 mypy-extensions==1.1.0
     # via mypy
-numpy==2.4.6 ; python_full_version < '3.12'
-    # via pandas-stubs
-numpy==2.5.2 ; python_full_version >= '3.12'
-    # via pandas-stubs
 packageurl-python==0.17.6
     # via cyclonedx-python-lib
 packaging==26.3
@@ -47,7 +43,6 @@ packaging==26.3
     #   pip-audit
     #   pip-requirements-parser
     #   pytest
-pandas-stubs==3.0.5.260730
 pathspec==1.1.1
     # via mypy
 pip==26.2.1
