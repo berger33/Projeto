@@ -35,6 +35,7 @@ dev = [
   "ruff>=0.14",
   "mypy>=1.13",
   "pip-audit>=2.9",
+  "pyyaml>=6.0",  # leitura de docker-compose.yml / ci.yml nos testes de configuração
 ]
 
 [tool.uv]

@@ -1,0 +1,11 @@
+# Só app/ + docs/ + requirements.txt entram na imagem (ver Dockerfile). Tudo o mais é excluído.
+*
+!app/
+!docs/
+!requirements.txt
+# Nunca copiar, mesmo dentro de app/
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/

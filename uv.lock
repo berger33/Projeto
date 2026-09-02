@@ -131,6 +131,7 @@ dev = [
     { name = "mypy" },
     { name = "pip-audit" },
     { name = "pytest" },
+    { name = "pyyaml" },
     { name = "ruff" },
 ]
 
@@ -150,6 +151,7 @@ dev = [
     { name = "mypy", specifier = ">=1.13" },
     { name = "pip-audit", specifier = ">=2.9" },
     { name = "pytest", specifier = ">=9.0.3,<10" },
+    { name = "pyyaml", specifier = ">=6.0" },
     { name = "ruff", specifier = ">=0.14" },
 ]
 

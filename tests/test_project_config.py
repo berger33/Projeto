@@ -150,3 +150,57 @@ def test_mypy_is_strict_over_app_and_evals(pyproject: dict) -> None:
 
 def test_coverage_floor_is_at_least_85(pyproject: dict) -> None:
     assert pyproject["tool"]["coverage"]["report"]["fail_under"] >= 85
+
+
+# ---------------------------------------------------------------------------
+# P3-02: Docker/compose (G-12, G-26)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def dockerfile() -> str:
+    return (ROOT / "Dockerfile").read_text(encoding="utf-8")
+
+
+def test_dockerfile_runs_as_non_root_with_healthcheck_and_prebuilt_index(dockerfile: str) -> None:
+    assert "USER aurora" in dockerfile and "useradd --system --uid 10001" in dockerfile
+    assert "HEALTHCHECK" in dockerfile and "/health" in dockerfile
+    assert "PYTHONUNBUFFERED=1" in dockerfile
+    assert (
+        "COPY --chown=aurora:aurora app/ ./app/" in dockerfile
+        and "COPY --chown=aurora:aurora docs/ ./docs/" in dockerfile
+    )
+    assert "COPY . ." not in dockerfile
+    assert "RUN python -m app.ingest --index-dir /data/index" in dockerfile
+    assert 'VOLUME ["/data/index"]' in dockerfile and "RAG_INDEX_DIR=/data/index" in dockerfile
+    # O pip install acontece antes de copiar o código: cache de camadas preservado entre mudanças no app.
+    assert dockerfile.index("pip install") < dockerfile.index("COPY --chown=aurora:aurora app/")
+
+
+def test_dockerignore_whitelists_only_runtime_inputs() -> None:
+    rules = [
+        line.strip()
+        for line in (ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.startswith("#")
+    ]
+    assert rules[0] == "*"
+    assert {"!app/", "!docs/", "!requirements.txt"} <= set(rules)
+    assert not any(rule.startswith("!") and rule not in {"!app/", "!docs/", "!requirements.txt"} for rule in rules)
+
+
+def test_compose_runs_ollama_mode_with_model_pull_and_volumes() -> None:
+    import yaml
+
+    compose = yaml.safe_load((ROOT / "docker-compose.yml").read_text(encoding="utf-8"))
+    services = compose["services"]
+    assert set(services) == {"app", "ollama", "ollama-pull"}
+    app = services["app"]
+    assert app["environment"]["OLLAMA_BASE_URL"] == "http://ollama:11434"
+    assert app["environment"]["RAG_INDEX_DIR"] == "/data/index" and "rag-index:/data/index" in app["volumes"]
+    assert app["depends_on"]["ollama-pull"]["condition"] == "service_completed_successfully"
+    assert "/ready" in " ".join(app["healthcheck"]["test"])
+    assert any(entry.get("path") == ".env" and entry.get("required") is False for entry in app["env_file"])
+    assert "ollama-models:/root/.ollama" in services["ollama"]["volumes"]
+    pull = " ".join(services["ollama-pull"]["command"])
+    assert "ollama pull" in pull and "nomic-embed-text-v2-moe" in pull and "qwen3:1.7b" in pull
+    assert set(compose["volumes"]) == {"ollama-models", "rag-index"}

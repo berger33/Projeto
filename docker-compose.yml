@@ -1,6 +1,76 @@
+# Aurora Document RAG — composição com Ollama local (P3-02).
+#
+#   docker compose up --build                 # modo ollama (padrão deste compose): app + ollama + pull dos modelos
+#   RAG_MODE=local docker compose up app      # só a API em modo local (sem LLM)
+#
+# Variáveis podem vir de um .env na raiz (copie de .env.example). Os modelos ficam no volume
+# `ollama-models` (não são baixados de novo a cada subida); o índice persistido fica em `rag-index`.
 services:
   app:
     build: .
     ports:
-      - "8000:8000"
+      - "${PORT:-8000}:8000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      RAG_MODE: ${RAG_MODE:-ollama}
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL:-nomic-embed-text-v2-moe}
+      OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-qwen3:1.7b}
+      RAG_INDEX_DIR: /data/index
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+    volumes:
+      - rag-index:/data/index
+    depends_on:
+      ollama-pull:
+        condition: service_completed_successfully
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/ready"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama-models:/root/.ollama
+    environment:
+      OLLAMA_KEEP_ALIVE: 10m
+    # Sem GPU dedicada (hardware alvo: i5-1135G7, 16 GB) o Ollama roda 100 % em CPU; para GPU NVIDIA
+    # descomente o bloco abaixo e instale o NVIDIA Container Toolkit.
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+
+  # Baixa os dois modelos uma única vez (idempotente) e termina; `app` só sobe depois.
+  ollama-pull:
+    image: ollama/ollama:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["sh", "-c"]
+    command:
+      - >
+        ollama pull "${OLLAMA_EMBED_MODEL:-nomic-embed-text-v2-moe}" &&
+        ollama pull "${OLLAMA_CHAT_MODEL:-qwen3:1.7b}"
+    restart: "no"
+
+volumes:
+  ollama-models:
+  rag-index:
