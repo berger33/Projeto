@@ -60,8 +60,8 @@ source = ["app", "evals"]
 [tool.coverage.report]
 show_missing = true
 skip_empty = true
-# Piso inicial = valor medido na auditoria (75 %). Será elevado para 85 % em P2-07/P3-01.
-fail_under = 70
+# Piso elevado para 85 % em P2-07 (medido: 96 %).
+fail_under = 85
 
 [tool.ruff]
 line-length = 120
