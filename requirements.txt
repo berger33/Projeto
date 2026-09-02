@@ -31,6 +31,10 @@ idna==3.19
     # via
     #   anyio
     #   httpx
+numpy==2.4.6 ; python_full_version < '3.12'
+    # via aurora-document-rag
+numpy==2.5.2 ; python_full_version >= '3.12'
+    # via aurora-document-rag
 pydantic==2.13.5
     # via fastapi
 pydantic-core==2.46.5

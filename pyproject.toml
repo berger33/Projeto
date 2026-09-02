@@ -25,6 +25,7 @@ dependencies = [
   "uvicorn[standard]>=0.34,<1.0",
   "pypdf>=6.16.1,<7.0",
   "httpx>=0.27,<1.0",
+  "numpy>=1.26,<3.0",
 ]
 
 [dependency-groups]
