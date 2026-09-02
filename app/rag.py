@@ -15,7 +15,6 @@ from .domain import (
     RAGRun,
     Retrieval,
     RetrievedChunk,
-    SourceRef,
 )
 from .embeddings import EmbeddingProvider, HashEmbeddingProvider, OllamaEmbeddingProvider
 from .errors import InvalidQuestionError, ProviderError, ping_ollama
@@ -24,6 +23,7 @@ from .observability import Timings, get_request_id, log_event, request_context
 from .refusal import judge
 from .retrieval import VectorIndex
 from .retriever import HybridRetriever, RetrieverConfig
+from .sources import derive_sources, strip_citations
 
 __all__ = ["REFUSAL_TEXT", "RAGService"]
 
@@ -207,9 +207,10 @@ class RAGService:
                     model_text_chars=len(generation.text),
                 )
                 return RAGRun(answer=result, retrieval=retrieval)
+            sources, sources_reason = derive_sources(generation, selected)
             result = RAGAnswer(
-                answer=generation.text,
-                sources=self._sources(selected),
+                answer=strip_citations(generation.text),
+                sources=sources,
                 confidence=self._confidence(selected, support=verdict.support),
                 mode=self.generator.mode,
                 request_id=request_id,
@@ -217,7 +218,7 @@ class RAGService:
                 status=AnswerStatus.ANSWERED,
                 support=verdict.support,
             )
-            self._log_answer(question, result, started=started, generation=generation)
+            self._log_answer(question, result, started=started, generation=generation, sources_reason=sources_reason)
             return RAGRun(answer=result, retrieval=retrieval)
         except Exception as exc:
             log_event(
@@ -279,19 +280,14 @@ class RAGService:
             support=support,
         )
 
-    @staticmethod
-    def _sources(selected: list[RetrievedChunk]) -> list[SourceRef]:
-        sources: list[SourceRef] = []
-        for item in selected[:3]:
-            ref = SourceRef(
-                document=item.chunk.source, page=item.chunk.locator.get("page"), row=item.chunk.locator.get("row")
-            )
-            if ref not in sources:
-                sources.append(ref)
-        return sources
-
     def _log_answer(
-        self, question: str, result: RAGAnswer, *, started: float, generation: Generation | None = None
+        self,
+        question: str,
+        result: RAGAnswer,
+        *,
+        started: float,
+        generation: Generation | None = None,
+        sources_reason: str | None = None,
     ) -> None:
         log_event(
             logger,
@@ -301,6 +297,8 @@ class RAGService:
             mode=result.mode,
             confidence=str(result.confidence),
             sources=len(result.sources),
+            source_ids=[source.chunk_id for source in result.sources],
+            sources_reason=sources_reason,
             answer_chars=len(result.answer),
             refusal_reason=result.refusal_reason,
             support=result.support,

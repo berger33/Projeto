@@ -104,7 +104,9 @@ A indexação envia os chunks em lotes (`OLLAMA_EMBED_BATCH_SIZE`) com até 2 no
 {"question":"Qual é o prazo para devolução?"}
 ```
 
-A resposta contém `answer`, `sources`, `confidence`, `mode`, `request_id`, `timings_ms` (ms por etapa: `retrieve`, `filter`, `generate`, `verify`), `status` e `refusal_reason`. Fontes são derivadas dos chunks realmente selecionados e preservam documento/página/linha quando disponíveis.
+A resposta contém `answer`, `sources`, `confidence`, `mode`, `request_id`, `timings_ms` (ms por etapa: `retrieve`, `filter`, `generate`, `verify`), `status` e `refusal_reason`.
+
+Cada fonte traz `document`, `page`/`row`, e ainda `chunk_id` (trecho exato do índice), `score` (cosseno), `section` (título detectado no documento) e `excerpt` (a frase do trecho que mais sustenta a resposta, ≤ 200 caracteres). As fontes vêm do que o gerador **declarou usar** (`used_sources` da saída JSON ou marcadores `[n]` no texto, que são removidos da resposta); só quando não há declaração as fontes caem para os trechos selecionados, marcados com `inferred: true`.
 
 `status` distingue `answered`, `refused_no_context` (nenhum trecho passou nos filtros de retrieval) e `refused_by_model` (o gerador recusou ou a resposta não passou na verificação). Toda recusa devolve o mesmo texto canônico, `sources: []` e `confidence: "baixa"`; `refusal_reason` explica o motivo: `declared` (o modelo declarou não ter sustentação), `pattern` (formulação de recusa reconhecida), `unsupported` (resposta com pouca sobreposição com o contexto), `unsupported_numbers` (prazo/valor/percentual ausente das fontes) ou `no_context`.
 

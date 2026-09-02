@@ -1,13 +1,13 @@
 {
-  "_comment": "Pisos aplicados por tests/test_evals.py sobre as métricas de evals/harness.py. 'local' = baseline medida no modo hash+extrativo; é um gate de regressão e deve SUBIR a cada item que melhorar o pipeline (o diff deste arquivo documenta o ganho). 'ollama' = critérios de aceite da Fase 3 §4 para o modo principal; o teste correspondente só roda com RAG_EVAL_OLLAMA=1 e servidor acessível, e é esperado que falhe até a Onda 1 estar completa. Histórico: P0-03 (13 chunks; recall@5 0.933, MRR 0.733, precision 0.709, recusa correta 0.50) → P1-03 rechunking por seção (25 chunks, granularidade 2x maior; expected_chunk_ids remapeados por conteúdo): recall@5 0.822, MRR 0.677, precision 0.752, recusa correta 0.75 — a queda de recall é esperada com hash embeddings e alvos mais estreitos e é recuperada em P1-04 (busca híbrida). → P1-04 busca híbrida BM25+vetorial (RRF), normalização PT-BR com stemmer, filtro sobre o pool fundido com três níveis de evidência: recall@5 1.00, MRR 0.817, precision 0.796, recusa correta 1.00, recusa indevida 0.05, content pass 0.811.",
+  "_comment": "Pisos aplicados por tests/test_evals.py sobre as métricas de evals/harness.py. 'local' = baseline medida no modo hash+extrativo; é um gate de regressão e deve SUBIR a cada item que melhorar o pipeline (o diff deste arquivo documenta o ganho). 'ollama' = critérios de aceite da Fase 3 §4 para o modo principal; o teste correspondente só roda com RAG_EVAL_OLLAMA=1 e servidor acessível, e é esperado que falhe até a Onda 1 estar completa. Histórico: P0-03 (13 chunks; recall@5 0.933, MRR 0.733, precision 0.709, recusa correta 0.50) → P1-03 rechunking por seção (25 chunks, granularidade 2x maior; expected_chunk_ids remapeados por conteúdo): recall@5 0.822, MRR 0.677, precision 0.752, recusa correta 0.75 — a queda de recall é esperada com hash embeddings e alvos mais estreitos e é recuperada em P1-04 (busca híbrida). → P1-04 busca híbrida BM25+vetorial (RRF), normalização PT-BR com stemmer, filtro sobre o pool fundido com três níveis de evidência: recall@5 1.00, MRR 0.817, precision 0.796, recusa correta 1.00, recusa indevida 0.05, content pass 0.811. → P2-01 fontes derivadas do uso real (used_sources/[n]/fallback): source precision 0.796 → 0.900.",
   "local": {
     "measured_baseline": {
       "date": "2026-09-02",
-      "commit_item": "P1-04",
+      "commit_item": "P2-01",
       "recall_at_k": 1.0,
       "selected_recall": 0.8222,
       "mrr": 0.8173,
-      "source_precision": 0.7963,
+      "source_precision": 0.9,
       "correct_refusal_rate": 1.0,
       "false_refusal_rate": 0.05,
       "content_pass_rate": 0.8113
@@ -22,7 +22,7 @@
       "min": 0.78
     },
     "source_precision": {
-      "min": 0.78
+      "min": 0.88
     },
     "correct_refusal_rate": {
       "min": 1.0

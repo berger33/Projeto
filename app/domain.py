@@ -51,6 +51,18 @@ class SourceRef:
     document: str
     page: int | None = None
     row: int | None = None
+    # Rastreabilidade (P2-01): chunk exato, score vetorial, seção e trecho (<= 200 chars) que sustentou
+    # a resposta. ``inferred=True`` quando a fonte veio dos chunks selecionados por falta de citação
+    # explícita do gerador (fallback), e não de ``used_sources``/marcadores ``[n]``.
+    chunk_id: str | None = None
+    score: float | None = None
+    section: str | None = None
+    excerpt: str | None = None
+    inferred: bool = False
+
+    @property
+    def identity(self) -> tuple[str, int | None, int | None]:
+        return (self.document, self.page, self.row)
 
 
 @dataclass(frozen=True)

@@ -4,6 +4,7 @@ import logging
 import unicodedata
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
+from dataclasses import asdict
 from pathlib import Path
 from typing import Annotated
 
@@ -44,6 +45,12 @@ class SourceResponse(BaseModel):
     document: str
     page: int | None = None
     row: int | None = None
+    # Aditivos (D10): rastreabilidade até o chunk e o trecho que sustentou a resposta.
+    chunk_id: str | None = None
+    score: float | None = None
+    section: str | None = None
+    excerpt: str | None = None
+    inferred: bool = False
 
 
 class AskResponse(BaseModel):
@@ -183,7 +190,7 @@ def create_app(service: RAGService | None = None, *, service_factory: ServiceFac
             raise AuroraError(f"{type(exc).__name__}: {exc}") from exc
         return AskResponse(
             answer=result.answer,
-            sources=[SourceResponse(**source.__dict__) for source in result.sources],
+            sources=[SourceResponse(**asdict(source)) for source in result.sources],
             confidence=result.confidence,
             mode=result.mode,
             request_id=result.request_id or get_request_id(),
