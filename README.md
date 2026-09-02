@@ -172,6 +172,8 @@ python -m evals.run --k 8 --min-score 0.3
 
 Métricas reportadas (definições em `evals/harness.py`): `recall@k` e `MRR` dos candidatos do índice, `selected recall` (o que chega ao gerador), `source precision` (fontes citadas que pertencem aos documentos esperados), `correct refusal` (fora de escopo recusado sem fontes), `false refusal` (recusa indevida), `content pass` (verificações de conteúdo) e latência p50/p95, no total e por categoria.
 
+Os PDFs são divididos por **seção** (títulos numerados como `2. Dados coletados`), com cabeçalho/rodapé repetidos removidos, quebras de linha visuais desfeitas e um orçamento de ~300 tokens por chunk (`app/chunking.py`); cada chunk carrega `section`, posição no texto e estimativa de tokens.
+
 `tests/test_evals.py` roda os casos em modo local a cada `pytest` e compara com os pisos de [`evals/thresholds.json`](evals/thresholds.json) — a baseline medida em P0-03 vira gate de regressão e deve subir a cada melhoria do pipeline. O gate do modo Ollama (critérios de aceite do plano) só roda com `RAG_EVAL_OLLAMA=1 pytest -m ollama` e um servidor acessível em `OLLAMA_BASE_URL`; sem isso é pulado. Os relatórios em `evals/results/` não são versionados.
 
 ### Atualizar dependências

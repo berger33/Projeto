@@ -9,6 +9,7 @@ Responder perguntas usando exclusivamente a documentação da Aurora, com separa
 | Componente | Responsabilidade |
 |---|---|
 | `app/documents.py` | lê PDF/CSV e produz chunks rastreáveis |
+| `app/chunking.py` | normalização (wrap visual, hifenização, boilerplate), seções numeradas/Markdown, split hierárquico seção → parágrafo → sentença → janela com sobreposição; invariantes: máximo respeitado, sem corte intra-palavra, cobertura total |
 | `app/embeddings.py` | converte textos em vetores; provider local ou Ollama (prefixos de tarefa por família de modelo, lotes, retry, validação de dimensão) |
 | `app/retrieval.py` | indexa vetores e calcula similaridade cosseno |
 | `app/generation.py` | monta prompt e produz resposta; extrativo local ou LLM Ollama |

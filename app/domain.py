@@ -32,6 +32,12 @@ class Chunk:
     text: str
     source: str
     locator: dict[str, Any] = field(default_factory=dict)
+    # Metadados de chunking (P1-03): seção detectada, posição no texto normalizado da página/arquivo
+    # e tamanho estimado em tokens. Opcionais para manter compatibilidade com chunks de CSV/testes.
+    section: str | None = None
+    char_start: int | None = None
+    char_end: int | None = None
+    token_estimate: int | None = None
 
 
 @dataclass(frozen=True)

@@ -6,59 +6,46 @@ from pathlib import Path
 import pandas as pd
 from pypdf import PdfReader
 
+from .chunking import ChunkingConfig, detect_boilerplate, split_document, split_text
 from .domain import Chunk
+
+__all__ = ["ChunkingConfig", "load_chunks", "split_text"]
 
 
 def _compact(text: str) -> str:
     return re.sub(r"[ \t]+", " ", text.replace("\r\n", "\n")).strip()
 
 
-def split_text(text: str, *, chunk_size: int = 900, overlap: int = 120) -> list[str]:
-    text = _compact(text)
-    if not text:
-        return []
-
-    paragraphs = [part.strip() for part in re.split(r"\n\s*\n+", text) if part.strip()]
-    chunks: list[str] = []
-    buffer = ""
-    for paragraph in paragraphs:
-        candidate = f"{buffer}\n\n{paragraph}".strip() if buffer else paragraph
-        if len(candidate) <= chunk_size:
-            buffer = candidate
-            continue
-        if buffer:
-            chunks.append(buffer)
-            tail = buffer[-overlap:] if overlap else ""
-            buffer = f"{tail}\n\n{paragraph}".strip()
-        else:
-            start = 0
-            while start < len(paragraph):
-                end = min(len(paragraph), start + chunk_size)
-                chunks.append(paragraph[start:end].strip())
-                if end == len(paragraph):
-                    break
-                start = max(start + 1, end - overlap)
-            buffer = ""
-    if buffer:
-        chunks.append(buffer)
-    return [chunk for chunk in chunks if chunk]
-
-
-def load_chunks(docs_dir: str | Path) -> list[Chunk]:
+def load_chunks(docs_dir: str | Path, config: ChunkingConfig | None = None) -> list[Chunk]:
     docs_dir = Path(docs_dir)
+    config = config or ChunkingConfig()
     chunks: list[Chunk] = []
-    for path in sorted(docs_dir.glob("*")):
+    paths = sorted(docs_dir.glob("*"))
+
+    # Cabeçalho/rodapé repetidos são detectados sobre todas as páginas de todos os PDFs do corpus
+    # (papel timbrado se repete entre documentos) e removidos antes do chunking (R-02).
+    pdf_pages: dict[Path, list[str]] = {}
+    for path in paths:
+        if path.suffix.lower() == ".pdf":
+            reader = PdfReader(str(path))
+            pdf_pages[path] = [page.extract_text() or "" for page in reader.pages]
+    boilerplate = detect_boilerplate(text for pages in pdf_pages.values() for text in pages)
+
+    for path in paths:
         suffix = path.suffix.lower()
         if suffix == ".pdf":
-            reader = PdfReader(str(path))
-            for page_number, page in enumerate(reader.pages, start=1):
-                for position, part in enumerate(split_text(page.extract_text() or ""), start=1):
+            for page_number, text in enumerate(pdf_pages[path], start=1):
+                for position, span in enumerate(split_document(text, config, boilerplate=boilerplate), start=1):
                     chunks.append(
                         Chunk(
                             id=f"{path.name}:p{page_number}:c{position}",
-                            text=part,
+                            text=span.text,
                             source=path.name,
                             locator={"page": page_number},
+                            section=span.section,
+                            char_start=span.char_start,
+                            char_end=span.char_end,
+                            token_estimate=span.token_estimate,
                         )
                     )
         elif suffix == ".csv":

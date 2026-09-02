@@ -13,7 +13,7 @@
       ],
       "expected_chunk_ids": [
         "faq.csv:r3",
-        "faq.pdf:p1:c1"
+        "faq.pdf:p1:c2"
       ],
       "must_contain": [
         "PIX",
@@ -34,7 +34,7 @@
       ],
       "expected_chunk_ids": [
         "faq.csv:r3",
-        "faq.pdf:p1:c1"
+        "faq.pdf:p1:c2"
       ],
       "must_contain": [
         "PIX"
@@ -51,7 +51,7 @@
       ],
       "expected_chunk_ids": [
         "faq.csv:r3",
-        "faq.pdf:p1:c1"
+        "faq.pdf:p1:c2"
       ],
       "must_contain": [
         "cartão"
@@ -68,7 +68,7 @@
       ],
       "expected_chunk_ids": [
         "faq.csv:r3",
-        "faq.pdf:p1:c1"
+        "faq.pdf:p1:c2"
       ],
       "must_contain": [
         "PIX"
@@ -85,7 +85,7 @@
       ],
       "expected_chunk_ids": [
         "faq.csv:r3",
-        "faq.pdf:p1:c1"
+        "faq.pdf:p1:c2"
       ],
       "must_contain": [
         "identificação"
@@ -102,7 +102,7 @@
       ],
       "expected_chunk_ids": [
         "faq.csv:r3",
-        "faq.pdf:p1:c1"
+        "faq.pdf:p1:c2"
       ],
       "must_not_contain": [
         "boleto é aceito",
@@ -121,7 +121,7 @@
       ],
       "expected_chunk_ids": [
         "faq.csv:r3",
-        "faq.pdf:p1:c1"
+        "faq.pdf:p1:c2"
       ],
       "must_contain": [
         "PIX"
@@ -139,7 +139,7 @@
       ],
       "expected_chunk_ids": [
         "faq.csv:r7",
-        "faq.pdf:p1:c2",
+        "faq.pdf:p1:c6",
         "politica_reembolso_devolucoes.pdf:p1:c1"
       ],
       "must_contain": [
@@ -158,7 +158,7 @@
       ],
       "expected_chunk_ids": [
         "faq.csv:r7",
-        "faq.pdf:p1:c2",
+        "faq.pdf:p1:c6",
         "politica_reembolso_devolucoes.pdf:p1:c1"
       ],
       "must_contain": [
@@ -177,7 +177,7 @@
       ],
       "expected_chunk_ids": [
         "faq.csv:r7",
-        "faq.pdf:p1:c2",
+        "faq.pdf:p1:c6",
         "politica_reembolso_devolucoes.pdf:p1:c1"
       ],
       "must_contain": [
@@ -196,7 +196,7 @@
       ],
       "expected_chunk_ids": [
         "faq.csv:r7",
-        "faq.pdf:p1:c2",
+        "faq.pdf:p1:c6",
         "politica_reembolso_devolucoes.pdf:p1:c1"
       ],
       "must_contain": [
@@ -214,9 +214,9 @@
         "faq.pdf"
       ],
       "expected_chunk_ids": [
-        "politica_reembolso_devolucoes.pdf:p1:c1",
+        "politica_reembolso_devolucoes.pdf:p1:c2",
         "faq.csv:r7",
-        "faq.pdf:p1:c2"
+        "faq.pdf:p1:c6"
       ],
       "must_contain": [
         "perfeitas condições"
@@ -231,7 +231,7 @@
         "politica_reembolso_devolucoes.pdf"
       ],
       "expected_chunk_ids": [
-        "politica_reembolso_devolucoes.pdf:p1:c1"
+        "politica_reembolso_devolucoes.pdf:p1:c2"
       ],
       "must_contain": [
         "sem sinais de uso"
@@ -246,7 +246,7 @@
         "politica_reembolso_devolucoes.pdf"
       ],
       "expected_chunk_ids": [
-        "politica_reembolso_devolucoes.pdf:p1:c1"
+        "politica_reembolso_devolucoes.pdf:p1:c3"
       ],
       "must_contain": [
         "postagem ou coleta"
@@ -276,8 +276,7 @@
         "politica_reembolso_devolucoes.pdf"
       ],
       "expected_chunk_ids": [
-        "politica_reembolso_devolucoes.pdf:p1:c1",
-        "politica_reembolso_devolucoes.pdf:p1:c2"
+        "politica_reembolso_devolucoes.pdf:p1:c4"
       ],
       "must_contain": [
         "mesmo meio de pagamento"
@@ -292,8 +291,7 @@
         "politica_reembolso_devolucoes.pdf"
       ],
       "expected_chunk_ids": [
-        "politica_reembolso_devolucoes.pdf:p1:c1",
-        "politica_reembolso_devolucoes.pdf:p1:c2"
+        "politica_reembolso_devolucoes.pdf:p1:c4"
       ],
       "must_contain": [
         "mesmo meio de pagamento"
@@ -308,7 +306,7 @@
         "politica_reembolso_devolucoes.pdf"
       ],
       "expected_chunk_ids": [
-        "politica_reembolso_devolucoes.pdf:p1:c2"
+        "politica_reembolso_devolucoes.pdf:p1:c4"
       ],
       "must_contain": [
         "banco"
@@ -323,7 +321,7 @@
         "politica_reembolso_devolucoes.pdf"
       ],
       "expected_chunk_ids": [
-        "politica_reembolso_devolucoes.pdf:p1:c2"
+        "politica_reembolso_devolucoes.pdf:p1:c5"
       ],
       "must_contain": [
         "suporte"
@@ -338,7 +336,7 @@
         "politica_reembolso_devolucoes.pdf"
       ],
       "expected_chunk_ids": [
-        "politica_reembolso_devolucoes.pdf:p1:c2"
+        "politica_reembolso_devolucoes.pdf:p1:c5"
       ],
       "must_contain": [
         "suporte"
@@ -355,9 +353,9 @@
         "faq.pdf"
       ],
       "expected_chunk_ids": [
-        "politica_reembolso_devolucoes.pdf:p1:c2",
+        "politica_reembolso_devolucoes.pdf:p1:c6",
         "faq.csv:r6",
-        "faq.pdf:p1:c2"
+        "faq.pdf:p1:c5"
       ],
       "must_contain": [
         "suporte@auroramoda.exemplo"
@@ -374,7 +372,7 @@
       ],
       "expected_chunk_ids": [
         "faq.csv:r4",
-        "faq.pdf:p1:c1"
+        "faq.pdf:p1:c3"
       ],
       "must_contain": [
         "confirmação do pagamento"
@@ -391,7 +389,7 @@
       ],
       "expected_chunk_ids": [
         "faq.csv:r4",
-        "faq.pdf:p1:c1"
+        "faq.pdf:p1:c3"
       ],
       "must_contain": [
         "CEP"
@@ -408,7 +406,7 @@
       ],
       "expected_chunk_ids": [
         "faq.csv:r4",
-        "faq.pdf:p1:c1"
+        "faq.pdf:p1:c3"
       ],
       "must_contain": [
         "pagamento"
@@ -425,7 +423,7 @@
       ],
       "expected_chunk_ids": [
         "faq.csv:r4",
-        "faq.pdf:p1:c1"
+        "faq.pdf:p1:c3"
       ],
       "must_not_contain": [
         "R$"
@@ -443,7 +441,7 @@
       ],
       "expected_chunk_ids": [
         "faq.csv:r5",
-        "faq.pdf:p1:c1"
+        "faq.pdf:p1:c4"
       ],
       "must_contain": [
         "despacho"
@@ -460,7 +458,7 @@
       ],
       "expected_chunk_ids": [
         "faq.csv:r5",
-        "faq.pdf:p1:c1"
+        "faq.pdf:p1:c4"
       ],
       "must_contain": [
         "despacho"
@@ -477,7 +475,7 @@
       ],
       "expected_chunk_ids": [
         "faq.csv:r5",
-        "faq.pdf:p1:c1"
+        "faq.pdf:p1:c4"
       ],
       "must_contain": [
         "pedido"
@@ -495,8 +493,8 @@
       ],
       "expected_chunk_ids": [
         "faq.csv:r6",
-        "faq.pdf:p1:c2",
-        "politica_reembolso_devolucoes.pdf:p1:c2"
+        "faq.pdf:p1:c5",
+        "politica_reembolso_devolucoes.pdf:p1:c6"
       ],
       "must_contain": [
         "suporte@auroramoda.exemplo"
@@ -514,8 +512,8 @@
       ],
       "expected_chunk_ids": [
         "faq.csv:r6",
-        "faq.pdf:p1:c2",
-        "politica_reembolso_devolucoes.pdf:p1:c2"
+        "faq.pdf:p1:c5",
+        "politica_reembolso_devolucoes.pdf:p1:c6"
       ],
       "must_contain": [
         "suporte@auroramoda.exemplo"
@@ -533,8 +531,8 @@
       ],
       "expected_chunk_ids": [
         "faq.csv:r6",
-        "faq.pdf:p1:c2",
-        "politica_reembolso_devolucoes.pdf:p1:c2"
+        "faq.pdf:p1:c5",
+        "politica_reembolso_devolucoes.pdf:p1:c6"
       ],
       "must_not_contain": [
         "(11)",
@@ -604,9 +602,9 @@
         "faq.pdf"
       ],
       "expected_chunk_ids": [
-        "politica_privacidade.pdf:p1:c1",
-        "politica_privacidade.pdf:p1:c2",
-        "faq.pdf:p1:c2"
+        "politica_privacidade.pdf:p1:c3",
+        "faq.pdf:p1:c7",
+        "politica_privacidade.pdf:p1:c1"
       ],
       "must_contain": [
         "pedidos"
@@ -621,7 +619,7 @@
         "politica_privacidade.pdf"
       ],
       "expected_chunk_ids": [
-        "politica_privacidade.pdf:p1:c1"
+        "politica_privacidade.pdf:p1:c2"
       ],
       "must_contain": [
         "CPF"
@@ -636,7 +634,7 @@
         "politica_privacidade.pdf"
       ],
       "expected_chunk_ids": [
-        "politica_privacidade.pdf:p1:c1"
+        "politica_privacidade.pdf:p1:c2"
       ],
       "must_contain": [
         "não são armazenados"
@@ -651,7 +649,7 @@
         "politica_privacidade.pdf"
       ],
       "expected_chunk_ids": [
-        "politica_privacidade.pdf:p1:c2"
+        "politica_privacidade.pdf:p1:c4"
       ],
       "must_contain": [
         "não comercializa"
@@ -666,7 +664,7 @@
         "politica_privacidade.pdf"
       ],
       "expected_chunk_ids": [
-        "politica_privacidade.pdf:p1:c2"
+        "politica_privacidade.pdf:p1:c4"
       ],
       "must_contain": [
         "transportadoras"
@@ -681,7 +679,7 @@
         "politica_privacidade.pdf"
       ],
       "expected_chunk_ids": [
-        "politica_privacidade.pdf:p1:c2"
+        "politica_privacidade.pdf:p1:c5"
       ],
       "must_contain": [
         "somente pelo período"
@@ -696,8 +694,7 @@
         "politica_privacidade.pdf"
       ],
       "expected_chunk_ids": [
-        "politica_privacidade.pdf:p1:c2",
-        "politica_privacidade.pdf:p1:c3"
+        "politica_privacidade.pdf:p1:c6"
       ],
       "must_contain": [
         "privacidade@auroramoda.exemplo"
@@ -712,8 +709,7 @@
         "politica_privacidade.pdf"
       ],
       "expected_chunk_ids": [
-        "politica_privacidade.pdf:p1:c2",
-        "politica_privacidade.pdf:p1:c3"
+        "politica_privacidade.pdf:p1:c6"
       ],
       "must_contain": [
         "privacidade@auroramoda.exemplo"
@@ -728,8 +724,7 @@
         "politica_privacidade.pdf"
       ],
       "expected_chunk_ids": [
-        "politica_privacidade.pdf:p1:c2",
-        "politica_privacidade.pdf:p1:c1"
+        "politica_privacidade.pdf:p1:c5"
       ],
       "must_contain": [
         "medidas técnicas"
@@ -748,7 +743,8 @@
         "Canberra",
         "Sydney"
       ],
-      "expects_sources": false
+      "expects_sources": false,
+      "expected_chunk_ids": []
     },
     {
       "id": "oos-02",
@@ -761,7 +757,8 @@
       "must_not_contain": [
         "Argentina"
       ],
-      "expects_sources": false
+      "expects_sources": false,
+      "expected_chunk_ids": []
     },
     {
       "id": "oos-03",
@@ -771,7 +768,8 @@
       "must_contain": [
         "não encontrei"
       ],
-      "expects_sources": false
+      "expects_sources": false,
+      "expected_chunk_ids": []
     },
     {
       "id": "oos-04",
@@ -786,7 +784,8 @@
         "22h"
       ],
       "expects_sources": false,
-      "notes": "Tematicamente próximo (loja), mas a documentação não menciona loja física nem horários."
+      "notes": "Tematicamente próximo (loja), mas a documentação não menciona loja física nem horários.",
+      "expected_chunk_ids": []
     },
     {
       "id": "oos-05",
@@ -800,7 +799,8 @@
         "10%",
         "cupom de"
       ],
-      "expects_sources": false
+      "expects_sources": false,
+      "expected_chunk_ids": []
     },
     {
       "id": "oos-06",
@@ -811,7 +811,8 @@
         "não encontrei"
       ],
       "expects_sources": false,
-      "notes": "Vocabulário de e-commerce ('conta'), mas nenhum documento trata de senha/login."
+      "notes": "Vocabulário de e-commerce ('conta'), mas nenhum documento trata de senha/login.",
+      "expected_chunk_ids": []
     },
     {
       "id": "oos-07",
@@ -824,7 +825,8 @@
       "must_not_contain": [
         "R$"
       ],
-      "expects_sources": false
+      "expects_sources": false,
+      "expected_chunk_ids": []
     },
     {
       "id": "oos-08",
@@ -835,7 +837,8 @@
         "não encontrei"
       ],
       "expects_sources": false,
-      "notes": "Compartilha o termo 'entrega' com o FAQ; a documentação não menciona entrega internacional."
+      "notes": "Compartilha o termo 'entrega' com o FAQ; a documentação não menciona entrega internacional.",
+      "expected_chunk_ids": []
     },
     {
       "id": "adv-01",
@@ -848,7 +851,7 @@
       ],
       "expected_chunk_ids": [
         "faq.csv:r7",
-        "faq.pdf:p1:c2",
+        "faq.pdf:p1:c6",
         "politica_reembolso_devolucoes.pdf:p1:c1"
       ],
       "must_not_contain": [
@@ -867,7 +870,7 @@
       ],
       "expected_chunk_ids": [
         "faq.csv:r3",
-        "faq.pdf:p1:c1"
+        "faq.pdf:p1:c2"
       ],
       "must_not_contain": [
         "bitcoin",
