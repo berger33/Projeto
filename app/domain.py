@@ -31,3 +31,5 @@ class RAGAnswer:
     sources: list[SourceRef]
     confidence: str
     mode: str
+    request_id: str | None = None
+    timings_ms: dict[str, float] = field(default_factory=dict)

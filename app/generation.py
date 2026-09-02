@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import logging
 import re
+import time
 from typing import Protocol
 
 import httpx
 
 from .domain import RetrievedChunk
+from .observability import log_event, ns_to_ms
+
+logger = logging.getLogger(__name__)
 
 
 class AnswerGenerator(Protocol):
@@ -47,12 +52,14 @@ class OllamaGenerator:
         self.timeout = timeout
 
     def generate(self, question: str, context: list[RetrievedChunk]) -> str:
+        prompt = build_prompt(question, context)
+        started = time.perf_counter()
         with httpx.Client(timeout=self.timeout) as client:
             response = client.post(
                 f"{self.base_url}/api/generate",
                 json={
                     "model": self.model,
-                    "prompt": build_prompt(question, context),
+                    "prompt": prompt,
                     "stream": False,
                     "options": {"temperature": 0.1},
                 },
@@ -60,6 +67,23 @@ class OllamaGenerator:
             response.raise_for_status()
             payload = response.json()
         answer = str(payload.get("response", "")).strip()
+        log_event(
+            logger,
+            logging.INFO,
+            "provider.generate",
+            model=self.model,
+            context_chunks=len(context),
+            prompt_chars=len(prompt),
+            answer_chars=len(answer),
+            prompt_tokens=payload.get("prompt_eval_count"),
+            completion_tokens=payload.get("eval_count"),
+            done_reason=payload.get("done_reason"),
+            ollama_total_ms=ns_to_ms(payload.get("total_duration")),
+            ollama_load_ms=ns_to_ms(payload.get("load_duration")),
+            ollama_prompt_eval_ms=ns_to_ms(payload.get("prompt_eval_duration")),
+            ollama_eval_ms=ns_to_ms(payload.get("eval_duration")),
+            duration_ms=round((time.perf_counter() - started) * 1000.0, 2),
+        )
         if not answer:
             raise RuntimeError("Ollama não retornou uma resposta textual.")
         return answer

@@ -87,9 +87,24 @@ OLLAMA_CHAT_MODEL=qwen3:0.6b
 {"question":"Qual é o prazo para devolução?"}
 ```
 
-A resposta contém `answer`, `sources`, `confidence` e `mode`. Fontes são derivadas dos chunks realmente selecionados e preservam documento/página/linha quando disponíveis.
+A resposta contém `answer`, `sources`, `confidence`, `mode`, `request_id` e `timings_ms` (ms por etapa: `retrieve`, `filter`, `generate`). Fontes são derivadas dos chunks realmente selecionados e preservam documento/página/linha quando disponíveis.
 
 `GET /health` informa saúde, quantidade de chunks indexados e modo ativo.
+
+## Observabilidade
+
+Toda requisição recebe um `X-Request-ID` (gerado, ou reaproveitado do cabeçalho enviado pelo cliente se tiver formato seguro) que volta no cabeçalho da resposta, no campo `request_id` do corpo e em todos os eventos de log daquela requisição. Os logs são estruturados (uma linha JSON por evento; `LOG_FORMAT=text` para leitura humana) e emitidos em stdout:
+
+| Evento | Quando | Campos principais |
+|---|---|---|
+| `index.built` / `index.error` | ao construir o índice | documentos, chunks, dimensão, modelos, duração |
+| `query.retrieved` | após retrieval + filtros | `candidates` (ids e scores do top-k), `selected` |
+| `query.answered` | ao final de cada pergunta | `status` (`answered`, `refused_no_context`, `refused_by_model`), confiança, nº de fontes, `timings_ms`, `total_ms` |
+| `provider.embed` / `provider.generate` | a cada chamada ao Ollama | tokens, `done_reason`, durações reportadas pelo servidor |
+| `provider.error` | falha em qualquer etapa | etapa, tipo do erro, stack trace |
+| `http.request` | a cada requisição HTTP | método, path, status, duração (`/health` só em DEBUG) |
+
+Pergunta e resposta em texto integral (`query.text`) só são registradas em `LOG_LEVEL=DEBUG`, porque perguntas podem conter dados pessoais.
 
 ## Testes e evals
 

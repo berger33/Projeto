@@ -14,6 +14,7 @@ Responder perguntas usando exclusivamente a documentação da Aurora, com separa
 | `app/generation.py` | monta prompt e produz resposta; extrativo local ou LLM Ollama |
 | `app/rag.py` | aplica top-k, limiar, relevância, geração e fontes |
 | `app/main.py` | expõe contratos HTTP e permite injeção do serviço em testes |
+| `app/observability.py` | logging estruturado (JSON), `X-Request-ID` por requisição e tempos por etapa |
 
 ## Fluxo generativo
 
@@ -52,5 +53,4 @@ CI não deve depender de servidor Ollama nem de API paga. Por isso existe um pro
 - reranking semântico;
 - streaming;
 - métricas Recall@K/MRR;
-- tracing e latência por etapa;
 - avaliação de groundedness com conjunto de referência maior.

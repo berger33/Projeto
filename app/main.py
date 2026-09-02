@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from functools import lru_cache
 from pathlib import Path
 
@@ -8,9 +9,11 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 from .config import Settings
+from .observability import RequestContextMiddleware, configure_logging, get_request_id, log_event
 from .rag import RAGService
 
 BASE = Path(__file__).resolve().parents[1]
+logger = logging.getLogger(__name__)
 
 
 class AskRequest(BaseModel):
@@ -28,6 +31,8 @@ class AskResponse(BaseModel):
     sources: list[SourceResponse]
     confidence: str
     mode: str
+    request_id: str | None = None
+    timings_ms: dict[str, float] = Field(default_factory=dict)
 
 
 @lru_cache(maxsize=1)
@@ -36,11 +41,13 @@ def get_service() -> RAGService:
 
 
 def create_app(service: RAGService | None = None) -> FastAPI:
+    configure_logging()
     app = FastAPI(
         title="Aurora Document RAG API",
         version="2.0.0",
         description="RAG documental com retrieval vetorial, geração local opcional e citações.",
     )
+    app.add_middleware(RequestContextMiddleware)
 
     def dependency() -> RAGService:
         return service or get_service()
@@ -56,12 +63,16 @@ def create_app(service: RAGService | None = None) -> FastAPI:
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except Exception as exc:
+            # O detalhe já foi registrado pelo serviço (provider.error); aqui fica só o mapeamento HTTP.
+            log_event(logger, logging.WARNING, "http.error", status=503, error_type=type(exc).__name__)
             raise HTTPException(status_code=503, detail=f"RAG indisponível: {exc}") from exc
         return AskResponse(
             answer=result.answer,
             sources=[SourceResponse(**source.__dict__) for source in result.sources],
             confidence=result.confidence,
             mode=result.mode,
+            request_id=result.request_id or get_request_id(),
+            timings_ms=result.timings_ms,
         )
 
     @app.get("/", response_class=HTMLResponse)
