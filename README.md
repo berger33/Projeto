@@ -48,13 +48,18 @@ O modo `ollama` é o caminho **RAG generativo**: documentos e pergunta viram emb
 
 ### Modo local reproduzível
 
+Requer Python **3.11+**. As dependências são travadas em `uv.lock`; `requirements.txt` (runtime) e `requirements-dev.txt` (ferramentas) são exportados dele.
+
 ```bash
 python -m venv .venv
 # Windows: .venv\Scripts\activate
 # Linux/macOS: source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt            # runtime
+pip install -r requirements-dev.txt        # opcional: pytest, ruff, mypy, coverage, pip-audit
 uvicorn app.main:app --reload
 ```
+
+Com [uv](https://docs.astral.sh/uv/) instalado, o equivalente é `uv sync` (cria `.venv` com runtime + dev) e `uv run uvicorn app.main:app --reload`.
 
 Abra `http://127.0.0.1:8000` ou `/docs`.
 
@@ -89,10 +94,22 @@ A resposta contém `answer`, `sources`, `confidence` e `mode`. Fontes são deriv
 ## Testes e evals
 
 ```bash
-pytest -q
+pytest -q                      # suíte (configuração em pyproject.toml; não precisa de PYTHONPATH)
+coverage run -m pytest -q && coverage report
+ruff check app tests && ruff format --check app tests
 ```
 
-A suíte cobre ingestão, chunking, retrieval, recusa fora da base, rastreabilidade das fontes, validação de entrada, contrato HTTP e casos de comportamento versionados.
+A suíte cobre ingestão CSV, chunking, retrieval, recusa fora da base, rastreabilidade das fontes, validação de entrada, contrato HTTP, casos de comportamento versionados e a coerência entre `pyproject.toml`, `uv.lock` e os `requirements*.txt`. A CI roda em Python 3.11, 3.12 e 3.13, verifica lint/formatação, cobertura mínima, atualidade do lockfile e vulnerabilidades conhecidas (`pip-audit`).
+
+### Atualizar dependências
+
+```bash
+uv lock --upgrade                                   # ou edite os pisos em pyproject.toml e rode `uv lock`
+uv export --no-dev --no-hashes --no-emit-project --format requirements-txt --output-file requirements.txt
+uv export --only-dev --no-hashes --no-emit-project --format requirements-txt --output-file requirements-dev.txt
+```
+
+Os três arquivos devem ser commitados juntos; a CI falha se `requirements*.txt` divergirem de `uv.lock`.
 
 ## Decisões importantes
 

@@ -10,6 +10,7 @@ from .domain import RetrievedChunk
 
 class AnswerGenerator(Protocol):
     mode: str
+
     def generate(self, question: str, context: list[RetrievedChunk]) -> str: ...
 
 
@@ -17,7 +18,9 @@ def build_prompt(question: str, context: list[RetrievedChunk]) -> str:
     blocks = []
     for number, item in enumerate(context, start=1):
         locator = ", ".join(f"{key}={value}" for key, value in item.chunk.locator.items())
-        blocks.append(f"[FONTE {number}] {item.chunk.source}{' (' + locator + ')' if locator else ''}\n{item.chunk.text}")
+        blocks.append(
+            f"[FONTE {number}] {item.chunk.source}{' (' + locator + ')' if locator else ''}\n{item.chunk.text}"
+        )
     joined = "\n\n".join(blocks)
     return f"""Você é o assistente documental da Aurora Moda Online.
 Responda SOMENTE com informações sustentadas pelo contexto abaixo.
@@ -47,7 +50,12 @@ class OllamaGenerator:
         with httpx.Client(timeout=self.timeout) as client:
             response = client.post(
                 f"{self.base_url}/api/generate",
-                json={"model": self.model, "prompt": build_prompt(question, context), "stream": False, "options": {"temperature": 0.1}},
+                json={
+                    "model": self.model,
+                    "prompt": build_prompt(question, context),
+                    "stream": False,
+                    "options": {"temperature": 0.1},
+                },
             )
             response.raise_for_status()
             payload = response.json()

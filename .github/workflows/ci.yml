@@ -11,21 +11,57 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+      - name: Install locked dependencies
+        run: python -m pip install -r requirements.txt -r requirements-dev.txt
+      - name: Lint
+        run: ruff check app tests
+      - name: Format check
+        run: ruff format --check app tests
+      - name: Compile Python
+        run: python -m compileall -q app tests
+      - name: Tests with coverage floor
+        run: |
+          coverage run -m pytest -q
+          coverage report
+      - name: Validate eval JSON
+        run: python -m json.tool evals/cases.json >/dev/null
+
+  lockfile:
+    # Garante que requirements*.txt foram regenerados a partir do uv.lock (fonte única de verdade).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Lockfile is up to date with pyproject.toml
+        run: uv lock --check
+      - name: Exported requirements match lockfile
+        run: |
+          uv export --no-dev --no-hashes --no-emit-project --format requirements-txt --output-file /tmp/requirements.txt
+          uv export --only-dev --no-hashes --no-emit-project --format requirements-txt --output-file /tmp/requirements-dev.txt
+          diff <(grep -v '^#' requirements.txt) <(grep -v '^#' /tmp/requirements.txt)
+          diff <(grep -v '^#' requirements-dev.txt) <(grep -v '^#' /tmp/requirements-dev.txt)
+
+  audit:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
-      - name: Install dependencies
-        run: python -m pip install -r requirements.txt
-      - name: Compile Python
-        run: python -m compileall -q app tests
-      - name: Run unit API and behavior tests
-        env:
-          PYTHONPATH: .
-        run: python -m pytest -q
-      - name: Validate eval JSON
-        run: python -m json.tool evals/cases.json >/dev/null
-      - name: Check whitespace
-        run: git diff --check
+      - name: Install runtime dependencies
+        run: python -m pip install -r requirements.txt pip-audit
+      - name: Known vulnerabilities in locked runtime dependencies
+        run: pip-audit -r requirements.txt --progress-spinner off

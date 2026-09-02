@@ -1,6 +1,31 @@
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*.egg-info/
 .venv/
+venv/
+
+# Ambiente / segredos
 .env
+.env.*
+!.env.example
+
+# Ferramentas
 .pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Artefatos do índice/avaliação (gerados localmente; ver evals/README quando existir)
+.rag_index/
+evals/results/*.json
+!evals/results/.gitkeep
+
+# SO / editores
 .DS_Store
+Thumbs.db
+.idea/
+.vscode/

@@ -1,0 +1,90 @@
+[project]
+name = "aurora-document-rag"
+version = "2.0.0"
+description = "RAG documental com FastAPI, retrieval vetorial, geração local via Ollama e citações rastreáveis."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "William de Melo Berger" }]
+requires-python = ">=3.11"
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Framework :: FastAPI",
+  "License :: OSI Approved :: MIT License",
+]
+
+# Dependências de runtime (vão para a imagem Docker). Pisos escolhidos pela auditoria (Fase 2, G-11):
+# - pypdf < 6.16.1 tem advisories conhecidos (GHSA-jm82-fx9c-mx94, CVE-2026-8430x, CVE-2026-82398).
+# - fastapi >= 0.135 não trava starlette < 1.0; starlette < 1.3.1 tem advisories (PYSEC-2026-161/248/249/...).
+#   starlette é transitiva, mas o piso é declarado aqui como barreira de segurança.
+dependencies = [
+  "fastapi>=0.135,<1.0",
+  "starlette>=1.3.1,<2.0",
+  "uvicorn[standard]>=0.34,<1.0",
+  "pandas>=2.2,<4.0",
+  "pypdf>=6.16.1,<7.0",
+  "httpx>=0.27,<1.0",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=9.0.3,<10",
+  "coverage[toml]>=7.6",
+  "ruff>=0.14",
+  "mypy>=1.13",
+  "pandas-stubs>=2.2",
+  "pip-audit>=2.9",
+]
+
+[tool.uv]
+# O projeto é uma aplicação, não uma biblioteca distribuível: nada é "buildado"/instalado como pacote.
+package = false
+
+[tool.pytest.ini_options]
+# Permite `pytest -q` a partir da raiz sem PYTHONPATH (Fase 2, G-21).
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+filterwarnings = [
+  "error::DeprecationWarning:app.*",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["app"]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
+# Piso inicial = valor medido na auditoria (75 %). Será elevado para 85 % em P2-07/P3-01.
+fail_under = 70
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+src = ["app", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "C4", "RUF", "N", "S"]
+ignore = [
+  "E501",  # comprimento de linha é responsabilidade do formatter
+  "B008",  # `Depends(...)` em default de argumento é o idioma do FastAPI
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "evals"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]  # `assert` é o mecanismo do pytest
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.11"
+files = ["app"]
+strict = true
+warn_unreachable = true
+pretty = true

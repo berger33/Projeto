@@ -53,12 +53,26 @@ def load_chunks(docs_dir: str | Path) -> list[Chunk]:
             reader = PdfReader(str(path))
             for page_number, page in enumerate(reader.pages, start=1):
                 for position, part in enumerate(split_text(page.extract_text() or ""), start=1):
-                    chunks.append(Chunk(id=f"{path.name}:p{page_number}:c{position}", text=part, source=path.name, locator={"page": page_number}))
+                    chunks.append(
+                        Chunk(
+                            id=f"{path.name}:p{page_number}:c{position}",
+                            text=part,
+                            source=path.name,
+                            locator={"page": page_number},
+                        )
+                    )
         elif suffix == ".csv":
             frame = pd.read_csv(path).fillna("")
             for row_index, row in frame.iterrows():
                 text = " | ".join(f"{column}: {row[column]}" for column in frame.columns)
-                chunks.append(Chunk(id=f"{path.name}:r{int(row_index)+2}", text=_compact(text), source=path.name, locator={"row": int(row_index)+2}))
+                chunks.append(
+                    Chunk(
+                        id=f"{path.name}:r{int(row_index) + 2}",
+                        text=_compact(text),
+                        source=path.name,
+                        locator={"row": int(row_index) + 2},
+                    )
+                )
     if not chunks:
         raise RuntimeError(f"Nenhum conteúdo PDF/CSV encontrado em {docs_dir}.")
     return chunks

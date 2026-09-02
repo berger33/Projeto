@@ -10,11 +10,34 @@ from .embeddings import HashEmbeddingProvider, OllamaEmbeddingProvider
 from .generation import ExtractiveGenerator, OllamaGenerator
 from .retrieval import VectorIndex
 
-STOPWORDS = {"qual", "quais", "como", "para", "com", "uma", "uns", "das", "dos", "que", "por", "ser", "sao", "são", "esta", "está", "meu", "minha"}
+STOPWORDS = {
+    "qual",
+    "quais",
+    "como",
+    "para",
+    "com",
+    "uma",
+    "uns",
+    "das",
+    "dos",
+    "que",
+    "por",
+    "ser",
+    "sao",
+    "são",
+    "esta",
+    "está",
+    "meu",
+    "minha",
+}
 
 
 def _terms(text: str) -> set[str]:
-    return {token.lower() for token in re.findall(r"[a-zA-ZÀ-ÿ0-9]+", text) if len(token) > 2 and token.lower() not in STOPWORDS}
+    return {
+        token.lower()
+        for token in re.findall(r"[a-zA-ZÀ-ÿ0-9]+", text)
+        if len(token) > 2 and token.lower() not in STOPWORDS
+    }
 
 
 class RAGService:
@@ -39,7 +62,11 @@ class RAGService:
             raise ValueError("A pergunta não pode ser vazia.")
         ranked = self.index.search(question, k=self.settings.retrieval_k)
         question_terms = _terms(question)
-        selected = [item for item in ranked if item.score >= self.settings.min_score and question_terms & _terms(item.chunk.text)]
+        selected = [
+            item
+            for item in ranked
+            if item.score >= self.settings.min_score and question_terms & _terms(item.chunk.text)
+        ]
         if not selected:
             return RAGAnswer(
                 answer="Não encontrei informação suficiente na documentação oficial da Aurora Moda Online.",
@@ -52,8 +79,15 @@ class RAGService:
             return RAGAnswer(answer=answer, sources=[], confidence="baixa", mode=self.generator.mode)
         sources: list[SourceRef] = []
         for item in selected[:3]:
-            ref = SourceRef(document=item.chunk.source, page=item.chunk.locator.get("page"), row=item.chunk.locator.get("row"))
+            ref = SourceRef(
+                document=item.chunk.source, page=item.chunk.locator.get("page"), row=item.chunk.locator.get("row")
+            )
             if ref not in sources:
                 sources.append(ref)
         top_score = selected[0].score
-        return RAGAnswer(answer=answer, sources=sources, confidence="alta" if top_score >= 0.45 else "média", mode=self.generator.mode)
+        return RAGAnswer(
+            answer=answer,
+            sources=sources,
+            confidence="alta" if top_score >= 0.45 else "média",
+            mode=self.generator.mode,
+        )

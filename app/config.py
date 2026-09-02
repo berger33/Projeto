@@ -14,7 +14,7 @@ class Settings:
     min_score: float = 0.12
 
     @classmethod
-    def from_env(cls) -> "Settings":
+    def from_env(cls) -> Settings:
         mode = os.getenv("RAG_MODE", "local").strip().lower()
         if mode not in {"local", "ollama"}:
             raise ValueError("RAG_MODE deve ser 'local' ou 'ollama'.")

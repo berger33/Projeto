@@ -32,6 +32,9 @@ class VectorIndex:
         if not query:
             return []
         query_vector = self.embeddings.embed([query])[0]
-        ranked = [RetrievedChunk(chunk=chunk, score=float(cosine_similarity(query_vector, vector))) for chunk, vector in zip(self.chunks, self.vectors, strict=True)]
+        ranked = [
+            RetrievedChunk(chunk=chunk, score=float(cosine_similarity(query_vector, vector)))
+            for chunk, vector in zip(self.chunks, self.vectors, strict=True)
+        ]
         ranked.sort(key=lambda item: item.score, reverse=True)
-        return ranked[:max(1, k)]
+        return ranked[: max(1, k)]
