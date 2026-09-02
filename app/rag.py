@@ -8,8 +8,9 @@ from pathlib import Path
 from .config import Settings
 from .documents import load_chunks
 from .domain import RAGAnswer, RAGRun, Retrieval, RetrievedChunk, SourceRef
-from .embeddings import HashEmbeddingProvider, OllamaEmbeddingProvider
-from .generation import ExtractiveGenerator, OllamaGenerator
+from .embeddings import EmbeddingProvider, HashEmbeddingProvider, OllamaEmbeddingProvider
+from .errors import InvalidQuestionError, ProviderError, ping_ollama
+from .generation import AnswerGenerator, ExtractiveGenerator, OllamaGenerator
 from .observability import Timings, get_request_id, log_event, request_context
 from .retrieval import VectorIndex
 
@@ -51,15 +52,23 @@ REFUSAL_TEXT = "Não encontrei informação suficiente na documentação oficial
 class RAGService:
     def __init__(self, docs_dir: str | Path, settings: Settings):
         self.settings = settings
+        self.docs_dir = Path(docs_dir)
         started = time.perf_counter()
         try:
             chunks = load_chunks(docs_dir)
+            embeddings: EmbeddingProvider
+            generator: AnswerGenerator
             if settings.rag_mode == "ollama":
-                embeddings = OllamaEmbeddingProvider(settings.ollama_base_url, settings.embedding_model)
-                self.generator = OllamaGenerator(settings.ollama_base_url, settings.generation_model)
+                embeddings = OllamaEmbeddingProvider(
+                    settings.ollama_base_url, settings.embedding_model, timeout=settings.embed_timeout_s
+                )
+                generator = OllamaGenerator(
+                    settings.ollama_base_url, settings.generation_model, timeout=settings.generate_timeout_s
+                )
             else:
                 embeddings = HashEmbeddingProvider()
-                self.generator = ExtractiveGenerator()
+                generator = ExtractiveGenerator()
+            self.generator = generator
             self.index = VectorIndex(chunks, embeddings)
         except Exception as exc:
             log_event(
@@ -89,6 +98,30 @@ class RAGService:
     @property
     def chunk_count(self) -> int:
         return len(self.index.chunks)
+
+    def readiness(self) -> dict[str, object]:
+        """Estado das dependências para ``/ready``: índice com chunks e, em modo Ollama, servidor
+        acessível com os modelos configurados presentes. Nunca levanta; ``ok`` resume o resultado."""
+        checks: dict[str, object] = {"index": {"ok": self.chunk_count > 0, "chunks": self.chunk_count}}
+        if self.settings.rag_mode == "ollama":
+            check: dict[str, object]
+            try:
+                available = ping_ollama(self.settings.ollama_base_url)
+            except ProviderError as exc:
+                log_event(
+                    logger, logging.WARNING, "ready.ollama_unreachable", error_code=exc.error_code, error=str(exc)
+                )
+                check = {"ok": False, "error_code": exc.error_code}
+            else:
+                missing = [
+                    model
+                    for model in (self.settings.embedding_model, self.settings.generation_model)
+                    if not _model_available(model, available)
+                ]
+                check = {"ok": not missing, "missing_models": missing}
+            checks["ollama"] = check
+        ok = all(bool(item["ok"]) for item in checks.values() if isinstance(item, dict))
+        return {"ok": ok, "checks": checks}
 
     def answer(self, question: str) -> RAGAnswer:
         return self.run(question).answer
@@ -126,7 +159,7 @@ class RAGService:
     def _run(self, question: str) -> RAGRun:
         question = question.strip()
         if not question:
-            raise ValueError("A pergunta não pode ser vazia.")
+            raise InvalidQuestionError("A pergunta não pode ser vazia.")
         timings = Timings()
         request_id = get_request_id()
         started = time.perf_counter()
@@ -210,3 +243,9 @@ class RAGService:
         # Texto integral só em DEBUG: perguntas podem conter dados pessoais.
         if logger.isEnabledFor(logging.DEBUG):
             log_event(logger, logging.DEBUG, "query.text", question=question, answer=result.answer)
+
+
+def _model_available(model: str, available: list[str]) -> bool:
+    """``qwen3:1.7b`` casa com ``qwen3:1.7b``; ``nomic-embed-text`` casa com ``nomic-embed-text:latest``."""
+    wanted = model if ":" in model else f"{model}:latest"
+    return any(name in (wanted, model) for name in available)

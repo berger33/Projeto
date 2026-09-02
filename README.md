@@ -77,7 +77,11 @@ RAG_MODE=ollama
 OLLAMA_BASE_URL=http://127.0.0.1:11434
 OLLAMA_EMBED_MODEL=nomic-embed-text
 OLLAMA_CHAT_MODEL=qwen3:0.6b
+OLLAMA_EMBED_TIMEOUT_S=30        # opcional (1..600)
+OLLAMA_GENERATE_TIMEOUT_S=60     # opcional (1..600); em CPU, modelos maiores podem precisar de mais
 ```
+
+`GET /ready` confirma se o servidor e os dois modelos estão disponíveis antes de enviar perguntas.
 
 ## API
 
@@ -89,7 +93,33 @@ OLLAMA_CHAT_MODEL=qwen3:0.6b
 
 A resposta contém `answer`, `sources`, `confidence`, `mode`, `request_id` e `timings_ms` (ms por etapa: `retrieve`, `filter`, `generate`). Fontes são derivadas dos chunks realmente selecionados e preservam documento/página/linha quando disponíveis.
 
-`GET /health` informa saúde, quantidade de chunks indexados e modo ativo.
+A pergunta é normalizada (`strip`) e precisa ter de 2 a 2000 caracteres; caracteres de controle (exceto quebra de linha e tab) são rejeitados com `422`.
+
+### Erros
+
+Toda resposta de erro tem o mesmo formato e nunca inclui detalhes internos (URL do Ollama, mensagem de exceção, stack trace) — esses ficam no log, correlacionados pelo `request_id`:
+
+```json
+{"detail": "Serviço de resposta temporariamente indisponível. Tente novamente em instantes.", "error_code": "provider_unavailable", "request_id": "3f2c…"}
+```
+
+| HTTP | `error_code` | Quando |
+|---|---|---|
+| 422 | `invalid_question` (ou erro de validação do Pydantic) | pergunta vazia, curta demais, longa demais ou com caracteres de controle |
+| 503 | `index_not_ready` | o índice ainda não foi construído (requisição antes do fim do boot) |
+| 503 | `provider_unavailable` | Ollama recusou conexão ou devolveu HTTP de erro (ex.: modelo não instalado) |
+| 503 | `provider_timeout` | Ollama excedeu `OLLAMA_EMBED_TIMEOUT_S` / `OLLAMA_GENERATE_TIMEOUT_S` |
+| 503 | `provider_invalid_response` | Ollama respondeu algo fora do contrato (JSON inválido, resposta vazia, nº de embeddings errado) |
+| 500 | `internal_error` | falha inesperada; o stack trace está no log com o mesmo `request_id` |
+
+### Saúde e prontidão
+
+- `GET /health` — **liveness**: o processo responde. Nunca consulta o Ollama. Inclui `chunks` e `mode` quando o índice existe (compatibilidade).
+- `GET /ready` — **readiness**: `200` só quando o índice tem chunks e, em `RAG_MODE=ollama`, o servidor responde em `/api/tags` com os dois modelos configurados instalados. Caso contrário `503` com `checks` detalhando o que falta (`missing_models`, `error_code`). Use este endpoint em orquestradores para só rotear tráfego quando o serviço puder responder.
+
+### Inicialização
+
+O índice é construído **uma única vez** no `lifespan` do FastAPI, antes de o servidor aceitar conexões. Configuração inválida (`RAG_MODE` desconhecido, `RAG_TOP_K` fora de `1..50`, `RAG_MIN_SCORE` fora de `0..1`, URL do Ollama malformada, timeouts fora de `1..600 s`) ou índice impossível de construir (corpus vazio, Ollama inacessível) fazem o processo **encerrar no boot** com a variável problemática no log (`startup.failed`), em vez de servir `500`.
 
 ## Observabilidade
 
@@ -102,7 +132,10 @@ Toda requisição recebe um `X-Request-ID` (gerado, ou reaproveitado do cabeçal
 | `query.answered` | ao final de cada pergunta | `status` (`answered`, `refused_no_context`, `refused_by_model`), confiança, nº de fontes, `timings_ms`, `total_ms` |
 | `provider.embed` / `provider.generate` | a cada chamada ao Ollama | tokens, `done_reason`, durações reportadas pelo servidor |
 | `provider.error` | falha em qualquer etapa | etapa, tipo do erro, stack trace |
-| `http.request` | a cada requisição HTTP | método, path, status, duração (`/health` só em DEBUG) |
+| `http.error` | resposta de erro da API | status, `error_code`, tipo e mensagem interna do erro (o cliente recebe só o genérico) |
+| `http.request` | a cada requisição HTTP | método, path, status, duração (`/health` e `/ready` só em DEBUG) |
+| `settings.loaded` / `startup.failed` | no boot | configuração efetiva (sem credenciais) e origem de cada valor; motivo da falha de boot |
+| `ready.ollama_unreachable` | em `/ready`, modo Ollama | `error_code` da sonda ao Ollama |
 
 Pergunta e resposta em texto integral (`query.text`) só são registradas em `LOG_LEVEL=DEBUG`, porque perguntas podem conter dados pessoais.
 
@@ -147,7 +180,7 @@ Os três arquivos devem ser commitados juntos; a CI falha se `requirements*.txt`
 - **Lógica central visível em Python.** O projeto evita esconder retrieval e geração atrás de abstrações desnecessárias.
 - **Providers substituíveis.** Embeddings e geração usam interfaces simples.
 - **Transparência.** O modo offline é extrativo; somente o modo Ollama é descrito como generativo.
-- **Falha explícita.** Erro de provider retorna `503`, não sucesso inventado.
+- **Falha explícita.** Erro de provider retorna `503` com `error_code` estável, não sucesso inventado; configuração inválida derruba o boot, não a primeira requisição.
 - **Recusa antes de citação.** Perguntas sem contexto suficiente não recebem fontes arbitrárias.
 
 ## Stack

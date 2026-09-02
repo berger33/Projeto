@@ -9,6 +9,7 @@ from typing import Protocol
 
 import httpx
 
+from .errors import ProviderResponseError, provider_call
 from .observability import log_event, ns_to_ms
 
 logger = logging.getLogger(__name__)
@@ -52,13 +53,17 @@ class OllamaEmbeddingProvider:
         if not texts:
             return []
         started = time.perf_counter()
-        with httpx.Client(timeout=self.timeout) as client:
-            response = client.post(f"{self.base_url}/api/embed", json={"model": self.model, "input": texts})
+        url = f"{self.base_url}/api/embed"
+        with provider_call("embed", url), httpx.Client(timeout=self.timeout) as client:
+            response = client.post(url, json={"model": self.model, "input": texts})
             response.raise_for_status()
             payload = response.json()
-        embeddings = payload.get("embeddings")
+        embeddings = payload.get("embeddings") if isinstance(payload, dict) else None
         if not isinstance(embeddings, list) or len(embeddings) != len(texts):
-            raise RuntimeError("Resposta inválida do endpoint de embeddings do Ollama.")
+            raise ProviderResponseError(
+                f"/api/embed devolveu {len(embeddings) if isinstance(embeddings, list) else 'nenhum'} "
+                f"embedding(s) para {len(texts)} texto(s) (modelo {self.model})"
+            )
         log_event(
             logger,
             logging.INFO,

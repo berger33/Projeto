@@ -13,10 +13,12 @@ from pathlib import Path
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from tests.conftest import ListHandler
 
 from app.config import Settings
 from app.domain import RetrievedChunk
 from app.embeddings import OllamaEmbeddingProvider
+from app.errors import ProviderUnavailableError
 from app.generation import OllamaGenerator
 from app.main import create_app
 from app.observability import (
@@ -31,35 +33,6 @@ from app.observability import (
     request_context,
 )
 from app.rag import RAGService
-
-
-class ListHandler(logging.Handler):
-    """Captura registros já formatados como JSON (exercita o formatter real)."""
-
-    def __init__(self) -> None:
-        super().__init__(level=logging.DEBUG)
-        self.setFormatter(JsonFormatter())
-        self.records: list[dict] = []
-
-    def emit(self, record: logging.LogRecord) -> None:
-        self.records.append(json.loads(self.format(record)))
-
-    def events(self, name: str) -> list[dict]:
-        return [record for record in self.records if record["event"] == name]
-
-
-@pytest.fixture()
-def captured() -> Iterator[ListHandler]:
-    root = logging.getLogger()
-    handler = ListHandler()
-    previous_level = root.level
-    root.addHandler(handler)
-    root.setLevel(logging.DEBUG)
-    try:
-        yield handler
-    finally:
-        root.removeHandler(handler)
-        root.setLevel(previous_level)
 
 
 @pytest.fixture()
@@ -391,7 +364,7 @@ def test_health_is_logged_at_debug_and_errors_at_warning(
         mode = "stub"
 
         def generate(self, question: str, context: list[RetrievedChunk]) -> str:
-            raise RuntimeError("provider down")
+            raise ProviderUnavailableError("connection refused to http://10.0.0.5:11434/api/generate")
 
     service.generator = BrokenGenerator()  # type: ignore[assignment]
     response = client.post("/api/ask", json={"question": "Qual o prazo de devolução?"})

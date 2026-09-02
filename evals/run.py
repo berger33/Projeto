@@ -15,13 +15,14 @@ exceto quando algum caso lança exceção (exit 1) — útil para detectar Ollam
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import os
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-from app.config import Settings
+from app.config import ConfigError, Settings
 from app.observability import configure_logging
 from app.rag import RAGService
 from evals.harness import ROOT, EvalReport, load_cases, run_eval
@@ -96,16 +97,16 @@ def main(argv: list[str] | None = None) -> int:
     # Silencia os eventos JSON do pipeline por padrão; LOG_LEVEL=INFO/DEBUG reabilita.
     configure_logging(level=os.getenv("LOG_LEVEL", "WARNING"))
 
-    os.environ["RAG_MODE"] = args.mode
-    base = Settings.from_env()
-    settings = Settings(
-        rag_mode=args.mode,
-        ollama_base_url=base.ollama_base_url,
-        embedding_model=base.embedding_model,
-        generation_model=base.generation_model,
-        retrieval_k=args.k if args.k is not None else base.retrieval_k,
-        min_score=args.min_score if args.min_score is not None else base.min_score,
-    )
+    overrides: dict[str, object] = {"rag_mode": args.mode}
+    if args.k is not None:
+        overrides["retrieval_k"] = args.k
+    if args.min_score is not None:
+        overrides["min_score"] = args.min_score
+    try:
+        settings = dataclasses.replace(Settings.from_env(), **overrides)  # type: ignore[arg-type]
+    except ConfigError as exc:
+        print(f"configuração inválida: {exc}", file=sys.stderr)
+        return 2
     try:
         service = RAGService(args.docs, settings)
     except Exception as exc:

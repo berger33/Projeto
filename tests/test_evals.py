@@ -12,6 +12,7 @@ Três camadas:
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 from pathlib import Path
@@ -363,16 +364,7 @@ def test_ollama_eval_meets_acceptance_targets():
     base_url = os.getenv("OLLAMA_BASE_URL", Settings().ollama_base_url)
     if not _ollama_reachable(base_url):
         pytest.skip(f"Ollama não acessível em {base_url}")
-    settings = Settings.from_env()
-    if settings.rag_mode != "ollama":
-        settings = Settings(
-            rag_mode="ollama",
-            ollama_base_url=settings.ollama_base_url,
-            embedding_model=settings.embedding_model,
-            generation_model=settings.generation_model,
-            retrieval_k=settings.retrieval_k,
-            min_score=settings.min_score,
-        )
+    settings = dataclasses.replace(Settings.from_env(), rag_mode="ollama")
     report = run_eval(RAGService(DOCS, settings))
     eval_cli.print_report(report, show_failures=True)
     path = eval_cli.save_report(report)

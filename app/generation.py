@@ -8,6 +8,7 @@ from typing import Protocol
 import httpx
 
 from .domain import RetrievedChunk
+from .errors import ProviderResponseError, provider_call
 from .observability import log_event, ns_to_ms
 
 logger = logging.getLogger(__name__)
@@ -54,9 +55,10 @@ class OllamaGenerator:
     def generate(self, question: str, context: list[RetrievedChunk]) -> str:
         prompt = build_prompt(question, context)
         started = time.perf_counter()
-        with httpx.Client(timeout=self.timeout) as client:
+        url = f"{self.base_url}/api/generate"
+        with provider_call("generate", url), httpx.Client(timeout=self.timeout) as client:
             response = client.post(
-                f"{self.base_url}/api/generate",
+                url,
                 json={
                     "model": self.model,
                     "prompt": prompt,
@@ -66,6 +68,8 @@ class OllamaGenerator:
             )
             response.raise_for_status()
             payload = response.json()
+        if not isinstance(payload, dict):
+            raise ProviderResponseError(f"/api/generate devolveu {type(payload).__name__} em vez de objeto JSON")
         answer = str(payload.get("response", "")).strip()
         log_event(
             logger,
@@ -85,7 +89,9 @@ class OllamaGenerator:
             duration_ms=round((time.perf_counter() - started) * 1000.0, 2),
         )
         if not answer:
-            raise RuntimeError("Ollama não retornou uma resposta textual.")
+            raise ProviderResponseError(
+                f"/api/generate não devolveu texto (modelo {self.model}, done_reason={payload.get('done_reason')!r})"
+            )
         return answer
 
 
