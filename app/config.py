@@ -8,7 +8,9 @@ objeto é construído diretamente em código/testes.
 
 from __future__ import annotations
 
+import dataclasses
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from urllib.parse import urlsplit
 
@@ -28,15 +30,60 @@ class ConfigError(ValueError):
 
 
 @dataclass(frozen=True)
+class RetrievalThresholds:
+    """Limiares de retrieval/confiança de um provider de embeddings (Fase 2, R-11/R-25).
+
+    A escala do cosseno depende do modelo: no hash local, legítimos ficam em 0,26-0,63 e irrelevantes
+    até ~0,35; em modelos densos (nomic, bge) irrelevantes costumam ficar >= 0,3 e legítimos >= 0,55.
+    Os valores default de cada perfil vêm de ``evals/thresholds.json`` (calibrados por
+    ``python -m evals.calibrate``); variáveis de ambiente sobrescrevem individualmente.
+    """
+
+    min_score: float
+    vector_only_min_score: float
+    vector_with_overlap_min_score: float
+    min_lexical_coverage: float
+    high_confidence_score: float  # top-1 acima disto (com gap/concordância) => "alta"
+    relative_gap: float  # (top1 - top2) / top1 mínimo para considerar o top-1 destacado
+
+
+# Perfis calibrados (ver evals/thresholds.json → "profiles"; mantidos aqui como fonte da verdade em código).
+THRESHOLD_PROFILES: dict[str, RetrievalThresholds] = {
+    "local": RetrievalThresholds(
+        min_score=0.12,
+        vector_only_min_score=0.5,
+        vector_with_overlap_min_score=0.35,
+        min_lexical_coverage=0.2,
+        high_confidence_score=0.45,
+        relative_gap=0.15,
+    ),
+    # Provisório até haver medição com o modelo real (P1-06 registra a dúvida; calibrar com
+    # `python -m evals.calibrate --mode ollama` assim que houver Ollama disponível).
+    "ollama": RetrievalThresholds(
+        min_score=0.35,
+        vector_only_min_score=0.65,
+        vector_with_overlap_min_score=0.5,
+        min_lexical_coverage=0.2,
+        high_confidence_score=0.7,
+        relative_gap=0.1,
+    ),
+}
+
+
+@dataclass(frozen=True)
 class Settings:
     rag_mode: str = "local"
     ollama_base_url: str = "http://127.0.0.1:11434"
     embedding_model: str = "nomic-embed-text-v2-moe"
     generation_model: str = "qwen3:1.7b"
     retrieval_k: int = 5
-    min_score: float = 0.12
-    # Cosseno a partir do qual um chunk é aceito mesmo sem sobreposição lexical com a pergunta.
-    vector_only_min_score: float = 0.5
+    # Limiares: ``None`` = usar o perfil do modo (THRESHOLD_PROFILES[rag_mode]); env sobrescreve.
+    min_score: float | None = None
+    vector_only_min_score: float | None = None
+    vector_with_overlap_min_score: float | None = None
+    min_lexical_coverage: float | None = None
+    high_confidence_score: float | None = None
+    relative_gap: float | None = None
     embed_timeout_s: float = 30.0
     generate_timeout_s: float = 60.0
     embed_batch_size: int = 32
@@ -54,16 +101,18 @@ class Settings:
             errors.append(f"RAG_TOP_K={self.retrieval_k!r}: deve ser inteiro")
         elif not TOP_K_RANGE[0] <= self.retrieval_k <= TOP_K_RANGE[1]:
             errors.append(f"RAG_TOP_K={self.retrieval_k}: faixa aceita {TOP_K_RANGE[0]}..{TOP_K_RANGE[1]}")
-        if not _is_number(self.min_score) or not MIN_SCORE_RANGE[0] <= self.min_score <= MIN_SCORE_RANGE[1]:
-            errors.append(f"RAG_MIN_SCORE={self.min_score!r}: faixa aceita {MIN_SCORE_RANGE[0]}..{MIN_SCORE_RANGE[1]}")
-        if (
-            not _is_number(self.vector_only_min_score)
-            or not MIN_SCORE_RANGE[0] <= self.vector_only_min_score <= MIN_SCORE_RANGE[1]
+        for env_name, score in (
+            ("RAG_MIN_SCORE", self.min_score),
+            ("RAG_VECTOR_ONLY_MIN_SCORE", self.vector_only_min_score),
+            ("RAG_VECTOR_WITH_OVERLAP_MIN_SCORE", self.vector_with_overlap_min_score),
+            ("RAG_MIN_LEXICAL_COVERAGE", self.min_lexical_coverage),
+            ("RAG_HIGH_CONFIDENCE_SCORE", self.high_confidence_score),
+            ("RAG_RELATIVE_GAP", self.relative_gap),
         ):
-            errors.append(
-                f"RAG_VECTOR_ONLY_MIN_SCORE={self.vector_only_min_score!r}: faixa aceita "
-                f"{MIN_SCORE_RANGE[0]}..{MIN_SCORE_RANGE[1]}"
-            )
+            if score is None:
+                continue
+            if not _is_number(score) or not MIN_SCORE_RANGE[0] <= score <= MIN_SCORE_RANGE[1]:
+                errors.append(f"{env_name}={score!r}: faixa aceita {MIN_SCORE_RANGE[0]}..{MIN_SCORE_RANGE[1]}")
         for env_name, value in (
             ("OLLAMA_EMBED_TIMEOUT_S", self.embed_timeout_s),
             ("OLLAMA_GENERATE_TIMEOUT_S", self.generate_timeout_s),
@@ -103,8 +152,8 @@ class Settings:
             raise ConfigError("Configuração inválida: " + "; ".join(errors))
 
     @classmethod
-    def from_env(cls, environ: dict[str, str] | None = None) -> Settings:
-        env = os.environ if environ is None else environ
+    def from_env(cls, environ: Mapping[str, str] | None = None) -> Settings:
+        env: Mapping[str, str] = os.environ if environ is None else environ
         source: dict[str, str] = {}
 
         def read(name: str, default: str) -> str:
@@ -122,8 +171,12 @@ class Settings:
             embedding_model=read("OLLAMA_EMBED_MODEL", "nomic-embed-text-v2-moe"),
             generation_model=read("OLLAMA_CHAT_MODEL", "qwen3:1.7b"),
             retrieval_k=_parse_int("RAG_TOP_K", read("RAG_TOP_K", "5")),
-            min_score=_parse_float("RAG_MIN_SCORE", read("RAG_MIN_SCORE", "0.12")),
-            vector_only_min_score=_parse_float("RAG_VECTOR_ONLY_MIN_SCORE", read("RAG_VECTOR_ONLY_MIN_SCORE", "0.5")),
+            min_score=_parse_optional_float("RAG_MIN_SCORE", env),
+            vector_only_min_score=_parse_optional_float("RAG_VECTOR_ONLY_MIN_SCORE", env),
+            vector_with_overlap_min_score=_parse_optional_float("RAG_VECTOR_WITH_OVERLAP_MIN_SCORE", env),
+            min_lexical_coverage=_parse_optional_float("RAG_MIN_LEXICAL_COVERAGE", env),
+            high_confidence_score=_parse_optional_float("RAG_HIGH_CONFIDENCE_SCORE", env),
+            relative_gap=_parse_optional_float("RAG_RELATIVE_GAP", env),
             embed_timeout_s=_parse_float("OLLAMA_EMBED_TIMEOUT_S", read("OLLAMA_EMBED_TIMEOUT_S", "30")),
             generate_timeout_s=_parse_float("OLLAMA_GENERATE_TIMEOUT_S", read("OLLAMA_GENERATE_TIMEOUT_S", "60")),
             embed_batch_size=_parse_int("OLLAMA_EMBED_BATCH_SIZE", read("OLLAMA_EMBED_BATCH_SIZE", "32")),
@@ -132,9 +185,28 @@ class Settings:
             source=source,
         )
 
+    @property
+    def thresholds(self) -> RetrievalThresholds:
+        """Perfil do modo com as sobrescritas explícitas aplicadas."""
+        profile = THRESHOLD_PROFILES[self.rag_mode]
+        overrides = {
+            name: value
+            for name, value in (
+                ("min_score", self.min_score),
+                ("vector_only_min_score", self.vector_only_min_score),
+                ("vector_with_overlap_min_score", self.vector_with_overlap_min_score),
+                ("min_lexical_coverage", self.min_lexical_coverage),
+                ("high_confidence_score", self.high_confidence_score),
+                ("relative_gap", self.relative_gap),
+            )
+            if value is not None
+        }
+        return dataclasses.replace(profile, **overrides) if overrides else profile
+
     def public_dict(self) -> dict[str, object]:
         """Valores seguros para log/diagnóstico (sem a URL do Ollama, que pode conter credenciais)."""
         host, port = _split_host_port(self.ollama_base_url) or (None, None)
+        thresholds = self.thresholds
         return {
             "rag_mode": self.rag_mode,
             "ollama_host": host,
@@ -142,8 +214,7 @@ class Settings:
             "embedding_model": self.embedding_model if self.rag_mode == "ollama" else "hash-local",
             "generation_model": self.generation_model if self.rag_mode == "ollama" else "extractive-local",
             "retrieval_k": self.retrieval_k,
-            "min_score": self.min_score,
-            "vector_only_min_score": self.vector_only_min_score,
+            "thresholds": dataclasses.asdict(thresholds),
             "embed_timeout_s": self.embed_timeout_s,
             "generate_timeout_s": self.generate_timeout_s,
             "embed_batch_size": self.embed_batch_size,
@@ -166,6 +237,13 @@ def _split_host_port(base_url: str) -> tuple[str, int | None] | None:
 
 def _is_number(value: object) -> bool:
     return isinstance(value, int | float) and not isinstance(value, bool) and value == value  # exclui NaN
+
+
+def _parse_optional_float(name: str, env: Mapping[str, str]) -> float | None:
+    raw = env.get(name)
+    if raw is None or not raw.strip():
+        return None
+    return _parse_float(name, raw.strip())
 
 
 def _parse_int(name: str, raw: str) -> int:

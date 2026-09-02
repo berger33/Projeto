@@ -178,7 +178,15 @@ python -m evals.run --k 8 --min-score 0.3
 
 Métricas reportadas (definições em `evals/harness.py`): `recall@k` e `MRR` dos candidatos do índice, `selected recall` (o que chega ao gerador), `source precision` (fontes citadas que pertencem aos documentos esperados), `correct refusal` (fora de escopo recusado sem fontes), `false refusal` (recusa indevida), `content pass` (verificações de conteúdo) e latência p50/p95, no total e por categoria.
 
-O retrieval é **híbrido**: cosseno sobre embeddings e BM25 sobre texto normalizado (sem acentos, stopwords PT-BR, radicais), fundidos por RRF; os filtros de evidência rodam sobre o pool fundido (4·k por canal) antes do corte em k. `RAG_MIN_SCORE` é o piso de cosseno; `RAG_VECTOR_ONLY_MIN_SCORE` (padrão 0,5) é o cosseno a partir do qual um trecho é aceito mesmo sem termo em comum com a pergunta.
+O retrieval é **híbrido**: cosseno sobre embeddings e BM25 sobre texto normalizado (sem acentos, stopwords PT-BR, radicais), fundidos por RRF; os filtros de evidência rodam sobre o pool fundido (4·k por canal) antes do corte em k.
+
+#### Limiares por provider
+
+A escala do cosseno depende do modelo de embedding, então os limiares vêm de um **perfil por modo** (`app/config.py: THRESHOLD_PROFILES`, espelhado em `evals/thresholds.json → profiles`): `min_score` (piso de cosseno), `vector_only_min_score` (aceita sem termo em comum), `vector_with_overlap_min_score` (aceita com um radical em comum), `min_lexical_coverage` (cobertura lexical ponderada por IDF), `high_confidence_score` e `relative_gap` (confiança). Qualquer um pode ser sobrescrito por variável de ambiente (`RAG_MIN_SCORE`, `RAG_VECTOR_ONLY_MIN_SCORE`, `RAG_VECTOR_WITH_OVERLAP_MIN_SCORE`, `RAG_MIN_LEXICAL_COVERAGE`, `RAG_HIGH_CONFIDENCE_SCORE`, `RAG_RELATIVE_GAP`).
+
+Para calibrar um provider, `python -m evals.calibrate --mode ollama` executa o retrieval uma vez por caso e varre uma grade de limiares, imprimindo recusa correta × recusa indevida, selected recall e precisão de fontes para cada combinação (o perfil atual aparece destacado). O perfil `local` foi calibrado assim; o perfil `ollama` é **provisório** (derivado da escala típica de modelos densos) até ser medido com o modelo real.
+
+`confidence` combina três sinais: score do top-1 na escala do provider, destaque do top-1 sobre o top-2 (gap relativo) **ou** dois trechos do mesmo documento concordando, e a sustentação medida da resposta (`alta` exige as três; sustentação < 0,6 rebaixa para `baixa`).
 
 Os PDFs são divididos por **seção** (títulos numerados como `2. Dados coletados`), com cabeçalho/rodapé repetidos removidos, quebras de linha visuais desfeitas e um orçamento de ~300 tokens por chunk (`app/chunking.py`); cada chunk carrega `section`, posição no texto e estimativa de tokens.
 

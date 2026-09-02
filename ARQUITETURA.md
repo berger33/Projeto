@@ -20,7 +20,8 @@ Responder perguntas usando exclusivamente a documentação da Aurora, com separa
 | `app/text.py` | normalização PT-BR (sem acentos, minúsculas), tokenização e stopwords compartilhadas |
 | `app/domain.py` | tipos do domínio: `AnswerStatus`, `Confidence`, `Generation`, `RAGAnswer`, texto canônico de recusa |
 | `app/main.py` | expõe contratos HTTP; constrói o serviço no `lifespan`; `/health` (liveness), `/ready` (readiness); handler de erros com `error_code` |
-| `app/config.py` | `Settings` a partir do ambiente, com validação de faixa e mensagens por variável (falha no boot) |
+| `app/config.py` | `Settings` a partir do ambiente, com validação de faixa e mensagens por variável (falha no boot); perfis de limiares por provider (`THRESHOLD_PROFILES`) |
+| `evals/calibrate.py` | varredura de limiares sobre o eval: curva recusa correta × indevida por combinação, para calibrar cada provider |
 | `app/errors.py` | exceções tipadas (`ProviderUnavailableError`, `ProviderTimeoutError`, …) com status HTTP e detalhe público genérico |
 | `app/observability.py` | logging estruturado (JSON), `X-Request-ID` por requisição e tempos por etapa |
 | `evals/harness.py`, `evals/run.py` | avaliação do pipeline sobre `docs/` (Recall@k, MRR, precisão de fontes, recusas, latência) |

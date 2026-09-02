@@ -57,13 +57,17 @@ class RAGService:
                 generator = ExtractiveGenerator()
             self.generator = generator
             self.index = VectorIndex(chunks, embeddings)
+            thresholds = settings.thresholds
+            self.thresholds = thresholds
             self.retriever = HybridRetriever(
                 chunks,
                 self.index,
                 RetrieverConfig(
                     k=settings.retrieval_k,
-                    min_score=settings.min_score,
-                    vector_only_min_score=settings.vector_only_min_score,
+                    min_score=thresholds.min_score,
+                    vector_only_min_score=thresholds.vector_only_min_score,
+                    vector_with_overlap_min_score=thresholds.vector_with_overlap_min_score,
+                    min_lexical_coverage=thresholds.min_lexical_coverage,
                 ),
             )
         except Exception as exc:
@@ -148,7 +152,7 @@ class RAGService:
             "query.retrieved",
             question_chars=len(question),
             k=self.settings.retrieval_k,
-            min_score=self.settings.min_score,
+            min_score=self.thresholds.min_score,
             pool=len(fused),
             candidates=[
                 {
@@ -206,7 +210,7 @@ class RAGService:
             result = RAGAnswer(
                 answer=generation.text,
                 sources=self._sources(selected),
-                confidence=Confidence.ALTA if selected[0].score >= 0.45 else Confidence.MEDIA,
+                confidence=self._confidence(selected, support=verdict.support),
                 mode=self.generator.mode,
                 request_id=request_id,
                 timings_ms=timings.as_dict(),
@@ -227,6 +231,32 @@ class RAGService:
                 timings_ms=timings.as_dict(),
             )
             raise
+
+    def _confidence(self, selected: list[RetrievedChunk], *, support: float | None) -> Confidence:
+        """Confiança a partir de três sinais (R-25): score do top-1 na escala do provider, destaque do
+        top-1 sobre o top-2 (gap relativo) ou concordância de fontes, e sustentação medida da resposta.
+
+        - **alta**: top-1 >= high_confidence_score **e** (gap relativo >= relative_gap **ou** >= 2 chunks
+          selecionados do mesmo documento) **e** sustentação >= 0,8 (quando medida).
+        - **baixa**: sustentação medida < 0,6 ou top-1 abaixo do piso vetorial (aceito só por evidência lexical).
+        - **média**: o restante.
+        """
+        thresholds = self.thresholds
+        top = selected[0].score
+        second = selected[1].score if len(selected) > 1 else 0.0
+        gap = (top - second) / top if top > 0 else 0.0
+        documents = [item.chunk.source for item in selected]
+        agreeing = any(documents.count(document) >= 2 for document in set(documents))
+        if support is not None and support < 0.6:
+            return Confidence.BAIXA
+        if top < thresholds.min_score:
+            return Confidence.BAIXA
+        strong_top = top >= thresholds.high_confidence_score
+        distinct = gap >= thresholds.relative_gap or agreeing
+        well_supported = support is None or support >= 0.8
+        if strong_top and distinct and well_supported:
+            return Confidence.ALTA
+        return Confidence.MEDIA
 
     def _refusal(
         self,

@@ -62,5 +62,24 @@
     "latency_p95_ms": {
       "max": 6000
     }
+  },
+  "profiles": {
+    "_comment": "Espelho de app.config.THRESHOLD_PROFILES (tests/test_thresholds.py garante igualdade). 'local' calibrado por `python -m evals.calibrate` em 2026-09-02 (600 combinações; perfil na fronteira: recusa correta 100 %, indevida 5 %; cosseno top-1 in_scope mediana 0,41 / out_of_scope máx 0,41). 'ollama' é PROVISÓRIO: derivado da escala típica de cosseno de modelos densos, sem medição real — DÚVIDA registrada: calibrar com `python -m evals.calibrate --mode ollama` assim que houver servidor Ollama com nomic-embed-text-v2-moe disponível.",
+    "local": {
+      "min_score": 0.12,
+      "vector_only_min_score": 0.5,
+      "vector_with_overlap_min_score": 0.35,
+      "min_lexical_coverage": 0.2,
+      "high_confidence_score": 0.45,
+      "relative_gap": 0.15
+    },
+    "ollama": {
+      "min_score": 0.35,
+      "vector_only_min_score": 0.65,
+      "vector_with_overlap_min_score": 0.5,
+      "min_lexical_coverage": 0.2,
+      "high_confidence_score": 0.7,
+      "relative_gap": 0.1
+    }
   }
 }

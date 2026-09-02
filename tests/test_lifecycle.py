@@ -102,7 +102,7 @@ def test_settings_requires_model_names_in_ollama_mode() -> None:
 def test_settings_defaults_and_env_parsing() -> None:
     settings = Settings.from_env({})
     assert settings == Settings()
-    assert settings.retrieval_k == 5 and settings.min_score == 0.12
+    assert settings.retrieval_k == 5 and settings.min_score is None and settings.thresholds.min_score == 0.12
     assert settings.embed_timeout_s == 30.0 and settings.generate_timeout_s == 60.0
     assert all(origin == "default" for origin in settings.source.values())
 
@@ -118,7 +118,7 @@ def test_settings_defaults_and_env_parsing() -> None:
         }
     )
     assert custom.rag_mode == "ollama" and custom.ollama_base_url == "https://ollama.interno:11434"
-    assert custom.retrieval_k == 8 and custom.min_score == 0.3
+    assert custom.retrieval_k == 8 and custom.min_score == 0.3 and custom.thresholds.min_score == 0.3
     assert custom.embed_timeout_s == 45.0 and custom.generate_timeout_s == 120.5
     assert custom.source["RAG_TOP_K"] == "env" and custom.source["OLLAMA_CHAT_MODEL"] == "default"
 

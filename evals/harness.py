@@ -24,6 +24,7 @@ Uso: ``python -m evals.run --mode local`` (ver ``evals/run.py``).
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import re
 import statistics
@@ -276,7 +277,8 @@ def run_eval(service: RAGService, cases: list[EvalCase] | None = None) -> EvalRe
     settings = {
         "rag_mode": service.settings.rag_mode,
         "retrieval_k": service.settings.retrieval_k,
-        "min_score": service.settings.min_score,
+        "min_score": service.settings.thresholds.min_score,
+        "thresholds": dataclasses.asdict(service.settings.thresholds),
         "embedding_model": service.settings.embedding_model if service.settings.rag_mode == "ollama" else "hash-local",
         "generation_model": (
             service.settings.generation_model if service.settings.rag_mode == "ollama" else "extractive-local"
