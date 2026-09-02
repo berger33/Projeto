@@ -98,6 +98,10 @@ class Settings:
     # Diversificação MMR dos trechos aprovados (0..1; 1 desliga): None = perfil do modo. Reranker opcional.
     mmr_lambda: float | None = None
     reranker: str = "noop"
+    # Cache de respostas em memória (entradas; 0 desliga) e TTL em segundos; concorrência máxima ao Ollama.
+    cache_max_entries: int = 256
+    cache_ttl_s: float = 600.0
+    ollama_max_concurrency: int = 2
     # Diretório do índice persistido (.npy + manifest). "" desabilita a persistência (reembeda a cada boot).
     # O default lê RAG_INDEX_DIR mesmo em construção direta, para que testes/CLIs isolem o índice.
     index_dir: str = field(default_factory=lambda: _read_index_dir(os.environ))
@@ -142,6 +146,20 @@ class Settings:
             errors.append(f"RAG_MMR_LAMBDA={self.mmr_lambda!r}: faixa aceita 0.0..1.0")
         if not self.reranker.strip():
             errors.append("RAG_RERANKER: não pode ser vazio (use 'noop')")
+        if (
+            not isinstance(self.cache_max_entries, int)
+            or isinstance(self.cache_max_entries, bool)
+            or not 0 <= self.cache_max_entries <= 100_000
+        ):
+            errors.append(f"RAG_CACHE_MAX_ENTRIES={self.cache_max_entries!r}: faixa aceita 0..100000")
+        if not _is_number(self.cache_ttl_s) or not 0 <= self.cache_ttl_s <= 86_400:
+            errors.append(f"RAG_CACHE_TTL_S={self.cache_ttl_s!r}: faixa aceita 0..86400 segundos")
+        if (
+            not isinstance(self.ollama_max_concurrency, int)
+            or isinstance(self.ollama_max_concurrency, bool)
+            or not 1 <= self.ollama_max_concurrency <= 64
+        ):
+            errors.append(f"OLLAMA_MAX_CONCURRENCY={self.ollama_max_concurrency!r}: faixa aceita 1..64")
         for env_name, value, bounds in (
             ("OLLAMA_NUM_CTX", self.num_ctx, NUM_CTX_RANGE),
             ("OLLAMA_NUM_PREDICT", self.num_predict, NUM_PREDICT_RANGE),
@@ -199,6 +217,9 @@ class Settings:
             num_predict=_parse_int("OLLAMA_NUM_PREDICT", read("OLLAMA_NUM_PREDICT", "300")),
             mmr_lambda=_parse_optional_float("RAG_MMR_LAMBDA", env),
             reranker=read("RAG_RERANKER", "noop").lower(),
+            cache_max_entries=_parse_int("RAG_CACHE_MAX_ENTRIES", read("RAG_CACHE_MAX_ENTRIES", "256")),
+            cache_ttl_s=_parse_float("RAG_CACHE_TTL_S", read("RAG_CACHE_TTL_S", "600")),
+            ollama_max_concurrency=_parse_int("OLLAMA_MAX_CONCURRENCY", read("OLLAMA_MAX_CONCURRENCY", "2")),
             index_dir=_read_index_dir(env),
             source=source,
         )
@@ -240,6 +261,9 @@ class Settings:
             "num_ctx": self.num_ctx,
             "num_predict": self.num_predict,
             "reranker": self.reranker,
+            "cache_max_entries": self.cache_max_entries,
+            "cache_ttl_s": self.cache_ttl_s,
+            "ollama_max_concurrency": self.ollama_max_concurrency,
             "index_dir": self.index_dir or None,
         }
 

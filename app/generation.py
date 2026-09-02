@@ -8,12 +8,11 @@ import time
 from dataclasses import dataclass, replace
 from typing import Any, Protocol
 
-import httpx
-
 from .domain import REFUSAL_TEXT, Generation, RetrievedChunk
 from .errors import ProviderResponseError, provider_call
 from .lexical import analyze
 from .observability import log_event, ns_to_ms
+from .ollama_client import OllamaGate, SharedClient, no_gate
 
 logger = logging.getLogger(__name__)
 
@@ -176,6 +175,7 @@ class OllamaGenerator:
         temperature: float = 0.1,
         keep_alive: str = "10m",
         think: bool = False,
+        gate: OllamaGate | None = None,
     ):
         self.base_url = base_url.rstrip("/")
         self.model = model
@@ -184,6 +184,11 @@ class OllamaGenerator:
         self.temperature = temperature
         self.keep_alive = keep_alive
         self.think = think
+        self.gate = gate or no_gate()
+        self._client = SharedClient(timeout)
+
+    def close(self) -> None:
+        self._client.close()
 
     def generate(self, question: str, context: list[RetrievedChunk]) -> Generation:
         prompt = build_prompt(question, context, self.budget)
@@ -200,8 +205,8 @@ class OllamaGenerator:
             )
         started = time.perf_counter()
         url = f"{self.base_url}/api/chat"
-        with provider_call("generate", url), httpx.Client(timeout=self.timeout) as client:
-            response = client.post(
+        with self.gate.acquire() as queue_wait_ms, provider_call("generate", url):
+            response = self._client.get().post(
                 url,
                 json={
                     "model": self.model,
@@ -258,6 +263,7 @@ class OllamaGenerator:
             completion_tokens=payload.get("eval_count"),
             done_reason=done_reason,
             think=self.think,
+            queue_wait_ms=queue_wait_ms,
             ollama_total_ms=ns_to_ms(payload.get("total_duration")),
             ollama_load_ms=ns_to_ms(payload.get("load_duration")),
             ollama_prompt_eval_ms=ns_to_ms(payload.get("prompt_eval_duration")),

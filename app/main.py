@@ -107,6 +107,9 @@ def create_app(service: RAGService | None = None, *, service_factory: ServiceFac
                 log_event(logger, logging.CRITICAL, "startup.failed", error_type=type(exc).__name__, error=str(exc))
                 raise
         yield
+        rag = getattr(app.state, "rag", None)
+        if rag is not None and service is None:
+            rag.close()
         app.state.rag = None
 
     app = FastAPI(

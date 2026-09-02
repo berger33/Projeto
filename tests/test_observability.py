@@ -220,6 +220,7 @@ def test_question_and_answer_text_only_logged_at_debug(service: RAGService, capt
         assert captured.events("query.text") == []
     finally:
         logging.getLogger("app.rag").setLevel(logging.NOTSET)
+    service.cache.clear()  # a 2ª chamada precisa executar o pipeline de novo (não vir do cache)
     service.answer("Quais formas de pagamento são aceitas?")
     (text,) = captured.events("query.text")
     assert text["question"].startswith("Quais formas") and "PIX" in text["answer"]

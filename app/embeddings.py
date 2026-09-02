@@ -12,6 +12,7 @@ import httpx
 
 from .errors import ProviderError, ProviderResponseError, ProviderTimeoutError, ProviderUnavailableError, provider_call
 from .observability import log_event, ns_to_ms
+from .ollama_client import OllamaGate, SharedClient, no_gate
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +116,7 @@ class OllamaEmbeddingProvider:
         max_retries: int = 2,
         backoff_s: float = 0.5,
         truncate: bool = True,
+        gate: OllamaGate | None = None,
     ):
         self.base_url = base_url.rstrip("/")
         self.model = model
@@ -125,6 +127,8 @@ class OllamaEmbeddingProvider:
         self.backoff_s = max(0.0, backoff_s)
         self.truncate = truncate
         self.dimension: int | None = None
+        self.gate = gate or no_gate()
+        self._client = SharedClient(timeout)
 
     # ----- API pública -----
 
@@ -133,26 +137,29 @@ class OllamaEmbeddingProvider:
             return []
         prefixed = [f"{self.prefixes.document}{text}" for text in texts]
         vectors: list[list[float]] = []
-        with httpx.Client(timeout=self.timeout) as client:
-            for start in range(0, len(prefixed), self.batch_size):
-                batch = prefixed[start : start + self.batch_size]
-                vectors.extend(self._embed_batch(client, batch, kind="documents"))
+        for start in range(0, len(prefixed), self.batch_size):
+            batch = prefixed[start : start + self.batch_size]
+            vectors.extend(self._embed_batch(batch, kind="documents"))
         return vectors
 
     def embed_query(self, text: str) -> list[float]:
-        with httpx.Client(timeout=self.timeout) as client:
-            return self._embed_batch(client, [f"{self.prefixes.query}{text}"], kind="query")[0]
+        return self._embed_batch([f"{self.prefixes.query}{text}"], kind="query")[0]
+
+    def close(self) -> None:
+        self._client.close()
 
     # ----- internos -----
 
-    def _embed_batch(self, client: httpx.Client, batch: list[str], *, kind: str) -> list[list[float]]:
+    def _embed_batch(self, batch: list[str], *, kind: str) -> list[list[float]]:
         url = f"{self.base_url}/api/embed"
         attempt = 0
         while True:
             started = time.perf_counter()
             try:
-                with provider_call("embed", url):
-                    response = client.post(url, json={"model": self.model, "input": batch, "truncate": self.truncate})
+                with self.gate.acquire() as queue_wait_ms, provider_call("embed", url):
+                    response = self._client.get().post(
+                        url, json={"model": self.model, "input": batch, "truncate": self.truncate}
+                    )
                     response.raise_for_status()
                     payload = response.json()
                 break
@@ -192,6 +199,7 @@ class OllamaEmbeddingProvider:
             chars=sum(len(text) for text in batch),
             dimension=self.dimension,
             attempts=attempt + 1,
+            queue_wait_ms=queue_wait_ms,
             prompt_tokens=payload.get("prompt_eval_count"),
             ollama_total_ms=ns_to_ms(payload.get("total_duration")),
             ollama_load_ms=ns_to_ms(payload.get("load_duration")),

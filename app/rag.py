@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import time
+from dataclasses import replace
 from pathlib import Path
 
+from .cache import AnswerCache, cache_key
 from .config import Settings
 from .domain import (
     REFUSAL_TEXT,
@@ -17,8 +21,9 @@ from .domain import (
 )
 from .embeddings import EmbeddingProvider, HashEmbeddingProvider, OllamaEmbeddingProvider
 from .errors import InvalidQuestionError, ProviderError, ping_ollama
-from .generation import AnswerGenerator, ExtractiveGenerator, OllamaGenerator, PromptBudget
+from .generation import PROMPT_VERSION, AnswerGenerator, ExtractiveGenerator, OllamaGenerator, PromptBudget
 from .observability import Timings, get_request_id, log_event, request_context
+from .ollama_client import OllamaGate
 from .persistence import IndexBuilder
 from .refusal import judge
 from .rerank import build_reranker
@@ -42,23 +47,27 @@ class RAGService:
         try:
             embeddings: EmbeddingProvider
             generator: AnswerGenerator
+            self.gate = OllamaGate(settings.ollama_max_concurrency)
             if settings.rag_mode == "ollama":
                 embeddings = OllamaEmbeddingProvider(
                     settings.ollama_base_url,
                     settings.embedding_model,
                     timeout=settings.embed_timeout_s,
                     batch_size=settings.embed_batch_size,
+                    gate=self.gate,
                 )
                 generator = OllamaGenerator(
                     settings.ollama_base_url,
                     settings.generation_model,
                     timeout=settings.generate_timeout_s,
                     budget=PromptBudget(num_ctx=settings.num_ctx, num_predict=settings.num_predict),
+                    gate=self.gate,
                 )
             else:
                 embeddings = HashEmbeddingProvider()
                 generator = ExtractiveGenerator()
             self.generator = generator
+            self.cache = AnswerCache(max_entries=settings.cache_max_entries, ttl_s=settings.cache_ttl_s)
             build = IndexBuilder(self.docs_dir, settings, embeddings, index_dir=self.index_dir).load_or_build()
             chunks, ingest = build.chunks, build.report
             self.ingest_report = ingest
@@ -130,6 +139,7 @@ class RAGService:
             build.report,
             build.manifest,
         )
+        self.cache.clear()  # a chave já muda com o index_version; limpar libera memória de imediato
         summary: dict[str, object] = {
             "chunks": len(build.chunks),
             "documents": len(build.report.files),
@@ -167,13 +177,58 @@ class RAGService:
     def answer(self, question: str) -> RAGAnswer:
         return self.run(question).answer
 
-    def run(self, question: str) -> RAGRun:
+    @property
+    def index_version(self) -> str:
+        """Identifica o conteúdo do índice (arquivos, modelo, chunking); muda a cada reindexação."""
+        manifest = self.manifest
+        raw = json.dumps(
+            {
+                "files": manifest.files,
+                "model": manifest.embedding_model,
+                "chunking": manifest.chunking_version,
+                "chunks": manifest.chunks,
+            },
+            sort_keys=True,
+        )
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+    def close(self) -> None:
+        """Libera conexões HTTP compartilhadas (chamado no shutdown do lifespan)."""
+        for provider in (self.index.embeddings, self.generator):
+            close = getattr(provider, "close", None)
+            if callable(close):
+                close()
+
+    def run(self, question: str, *, use_cache: bool = True) -> RAGRun:
         """Executa o pipeline completo e devolve a resposta junto com o rastro do retrieval."""
         # Fora de uma requisição HTTP (CLI, evals, testes) cada execução ganha o próprio request_id.
         if get_request_id() is not None:
-            return self._run(question)
+            return self._cached_run(question, use_cache=use_cache)
         with request_context():
+            return self._cached_run(question, use_cache=use_cache)
+
+    def _cached_run(self, question: str, *, use_cache: bool) -> RAGRun:
+        if not use_cache or not self.cache.enabled or not question.strip():
             return self._run(question)
+        key = cache_key(
+            question, index_version=self.index_version, prompt_version=PROMPT_VERSION, mode=self.generator.mode
+        )
+        hit = self.cache.get(key)
+        if hit is not None:
+            answer = replace(hit.answer, request_id=get_request_id(), timings_ms={"cache": 0.0})
+            log_event(
+                logger,
+                logging.INFO,
+                "query.cached",
+                status=str(answer.status),
+                sources=len(answer.sources),
+                cache=self.cache.stats.as_dict(),
+            )
+            return RAGRun(answer=answer, retrieval=hit.retrieval)
+        result = self._run(question)
+        if result.answer.status in (AnswerStatus.ANSWERED, AnswerStatus.REFUSED_NO_CONTEXT):
+            self.cache.put(key, result)
+        return result
 
     def _retrieve(self, question: str, timings: Timings) -> Retrieval:
         with timings.stage("retrieve"):
