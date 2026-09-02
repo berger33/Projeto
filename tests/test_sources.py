@@ -120,7 +120,7 @@ def test_sources_ignore_out_of_range_indexes_and_dedupe() -> None:
 
 @pytest.fixture()
 def service() -> RAGService:
-    return RAGService(ROOT / "docs", Settings())
+    return RAGService(ROOT / "corpus", Settings())
 
 
 def test_payment_question_no_longer_cites_privacy_policy(service: RAGService) -> None:

@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # Imagem de runtime do Aurora Document RAG (P3-02).
 # - Apenas dependências de runtime travadas pelo lockfile (requirements.txt é exportado de uv.lock).
-# - Copia só o necessário (app/ + docs/); .dockerignore exclui .git, .env, testes, auditoria etc.
+# - Copia só o necessário (app/ + corpus/); .dockerignore exclui .git, .env, testes, auditoria, docs etc.
 # - Usuário não-root; índice persistido em volume próprio (RAG_INDEX_DIR=/data/index).
 # - O índice é pré-construído no build para o modo local (boot em milissegundos); no modo ollama
 #   ele é (re)construído no primeiro boot contra o servidor Ollama e persistido no volume.
@@ -29,7 +29,7 @@ COPY --chown=aurora:aurora requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY --chown=aurora:aurora app/ ./app/
-COPY --chown=aurora:aurora docs/ ./docs/
+COPY --chown=aurora:aurora corpus/ ./corpus/
 
 USER aurora
 

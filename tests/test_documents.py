@@ -190,7 +190,7 @@ def test_short_chunks_are_not_near_deduped_only_exact(tmp_path: Path) -> None:
 
 
 def test_real_corpus_keeps_both_faq_versions_per_decision_d8() -> None:
-    chunks, report = load_corpus(ROOT / "docs")
+    chunks, report = load_corpus(ROOT / "corpus")
     assert {entry.name for entry in report.files} == {
         "faq.csv",
         "faq.pdf",

@@ -21,7 +21,7 @@ TOKEN = "segredo-de-teste-com-32-caracteres!!"  # noqa: S105 — valor de teste
 
 @pytest.fixture()
 def service() -> RAGService:
-    return RAGService(ROOT / "docs", Settings())
+    return RAGService(ROOT / "corpus", Settings())
 
 
 def _client(service: RAGService, **overrides: object) -> TestClient:

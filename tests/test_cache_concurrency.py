@@ -83,7 +83,7 @@ class CountingGenerator:
 
 @pytest.fixture()
 def service() -> RAGService:
-    return RAGService(ROOT / "docs", Settings())
+    return RAGService(ROOT / "corpus", Settings())
 
 
 def test_repeated_question_is_served_from_cache_with_fresh_request_id(
@@ -160,7 +160,7 @@ def test_cache_settings_are_validated_and_exposed() -> None:
         Settings.from_env({"OLLAMA_MAX_CONCURRENCY": "0"})
     custom = Settings.from_env({"RAG_CACHE_MAX_ENTRIES": "0", "OLLAMA_MAX_CONCURRENCY": "4"})
     assert custom.public_dict()["cache_max_entries"] == 0 and custom.public_dict()["ollama_max_concurrency"] == 4
-    service = RAGService(ROOT / "docs", custom)
+    service = RAGService(ROOT / "corpus", custom)
     assert not service.cache.enabled and service.gate.max_concurrency == 4
 
 

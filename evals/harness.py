@@ -1,4 +1,4 @@
-"""Harness de avaliação do pipeline RAG sobre o corpus real.
+"""Harness de avaliação do pipeline RAG sobre o corpus real (``corpus/``).
 
 Carrega ``evals/cases.json``, executa cada caso via ``RAGService.run`` (que expõe o rastro do
 retrieval além da resposta) e calcula métricas de recuperação, de resposta/recusa e de latência.

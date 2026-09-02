@@ -1,7 +1,7 @@
-# Só app/ + docs/ + requirements.txt entram na imagem (ver Dockerfile). Tudo o mais é excluído.
+# Só app/ + corpus/ + requirements.txt entram na imagem (ver Dockerfile). Tudo o mais é excluído.
 *
 !app/
-!docs/
+!corpus/
 !requirements.txt
 # Nunca copiar, mesmo dentro de app/
 **/__pycache__/

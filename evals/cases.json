@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "corpus": "docs/",
+  "corpus": "corpus/",
   "description": "Casos de avaliação sobre o corpus real (faq.csv, faq.pdf, politica_privacidade.pdf, politica_reembolso_devolucoes.pdf). Categorias: in_scope (pergunta coberta pela documentação), partial (parcialmente coberta; resposta deve se limitar ao que existe), out_of_scope (deve recusar sem fontes), typo (erro de digitação), no_accent (sem acentos), synonym (paráfrase/sinônimo), adversarial (injeção de instrução na pergunta). expected_sources: documentos aceitáveis (qualquer um deles conta como acerto); expected_chunk_ids: opcional, ids no formato do loader. must_contain/must_not_contain: verificação case-insensitive na resposta final.",
   "cases": [
     {

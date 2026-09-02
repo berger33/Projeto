@@ -84,7 +84,10 @@ def build_service() -> RAGService:
     """Constrói o serviço a partir do ambiente. ``ConfigError`` ou falha do índice interrompem o boot."""
     settings = Settings.from_env()
     log_event(logger, logging.INFO, "settings.loaded", settings=settings.public_dict(), source=settings.source)
-    return RAGService(BASE / "docs", settings)
+    corpus_dir = Path(settings.corpus_dir)
+    if not corpus_dir.is_absolute():
+        corpus_dir = BASE / corpus_dir
+    return RAGService(corpus_dir, settings)
 
 
 def create_app(

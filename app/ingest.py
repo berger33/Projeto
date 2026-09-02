@@ -1,6 +1,6 @@
 """Reindexação por linha de comando (P2-03).
 
-    python -m app.ingest                # (re)constrói o índice persistido a partir de docs/
+    python -m app.ingest                # (re)constrói o índice persistido a partir de corpus/ (ou CORPUS_DIR)
     python -m app.ingest --check        # só compara o manifesto gravado com o estado atual (exit 1 se precisar reindexar)
     python -m app.ingest --docs /srv/corpus --index-dir /var/lib/aurora/index
 
@@ -29,7 +29,7 @@ BASE = Path(__file__).resolve().parents[1]
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Constrói ou verifica o índice persistido do Aurora Document RAG.")
-    parser.add_argument("--docs", default=None, help="diretório do corpus (padrão: docs/)")
+    parser.add_argument("--docs", default=None, help="diretório do corpus (padrão: CORPUS_DIR ou corpus/)")
     parser.add_argument("--index-dir", default=None, help="diretório do índice (padrão: RAG_INDEX_DIR ou .rag_index)")
     parser.add_argument(
         "--check", action="store_true", help="não reindexa; sai com 1 se o índice estiver desatualizado"
@@ -48,7 +48,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"configuração inválida: {exc}", file=sys.stderr)
         return 2
     index_dir = Path(args.index_dir) if args.index_dir else (Path(settings.index_dir) if settings.index_dir else None)
-    docs = Path(args.docs) if args.docs else Path("docs")
+    docs = Path(args.docs) if args.docs else Path(settings.corpus_dir)
     if not docs.is_absolute():
         docs = BASE / docs
     args.docs = str(docs)

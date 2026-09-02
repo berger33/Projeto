@@ -156,13 +156,13 @@ def test_mmr_lambda_comes_from_profile_with_env_override() -> None:
     assert Settings(rag_mode="ollama").thresholds.mmr_lambda == 0.7
     custom = Settings.from_env({"RAG_MMR_LAMBDA": "0.6", "RAG_RERANKER": "NOOP"})
     assert custom.mmr_lambda == 0.6 and custom.thresholds.mmr_lambda == 0.6 and custom.reranker == "noop"
-    service = RAGService(ROOT / "docs", custom)
+    service = RAGService(ROOT / "corpus", custom)
     assert service.retriever.config.mmr_lambda == 0.6 and service.retriever.reranker.name == "noop"
     assert custom.public_dict()["thresholds"]["mmr_lambda"] == 0.6 and custom.public_dict()["reranker"] == "noop"
 
 
 def test_mmr_does_not_change_refusals_or_eval_gates() -> None:
-    service = RAGService(ROOT / "docs", Settings())
+    service = RAGService(ROOT / "corpus", Settings())
     assert service.answer("Qual é a capital da Austrália?").status == "refused_no_context"
     result = service.run("Qual é o prazo para devolver uma compra?")
     assert result.answer.status == "answered" and 1 <= len(result.retrieval.selected) <= 5

@@ -108,6 +108,8 @@ class Settings:
     rate_limit_burst: int | None = None
     trust_proxy: bool = False
     docs_enabled: bool = True
+    # Diretório do corpus (PDF/CSV/MD/TXT). Relativo à raiz do projeto quando não absoluto.
+    corpus_dir: str = "corpus"
     # Diretório do índice persistido (.npy + manifest). "" desabilita a persistência (reembeda a cada boot).
     # O default lê RAG_INDEX_DIR mesmo em construção direta, para que testes/CLIs isolem o índice.
     index_dir: str = field(default_factory=lambda: _read_index_dir(os.environ))
@@ -247,6 +249,7 @@ class Settings:
             rate_limit_burst=_parse_optional_int("RAG_RATE_LIMIT_BURST", env),
             trust_proxy=_parse_bool("RAG_TRUST_PROXY", read("RAG_TRUST_PROXY", "false")),
             docs_enabled=_parse_bool("RAG_DOCS_ENABLED", read("RAG_DOCS_ENABLED", "true")),
+            corpus_dir=read("CORPUS_DIR", "corpus"),
             index_dir=_read_index_dir(env),
             source=source,
         )
@@ -291,6 +294,7 @@ class Settings:
             "cache_max_entries": self.cache_max_entries,
             "cache_ttl_s": self.cache_ttl_s,
             "ollama_max_concurrency": self.ollama_max_concurrency,
+            "corpus_dir": self.corpus_dir,
             "index_dir": self.index_dir or None,
             "api_token_enabled": bool(self.api_token),
             "rate_limit_per_minute": self.rate_limit_per_minute or None,

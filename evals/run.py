@@ -2,7 +2,7 @@
 
 Exemplos::
 
-    python -m evals.run                         # modo local (hash embedding + extrativo), corpus docs/
+    python -m evals.run                         # modo local (hash embedding + extrativo), corpus corpus/
     python -m evals.run --mode ollama           # modo principal (exige Ollama em OLLAMA_BASE_URL)
     python -m evals.run --mode ollama --k 8 --min-score 0.3
     python -m evals.run --save                  # grava evals/results/<timestamp>-<mode>.json
@@ -82,7 +82,7 @@ def save_report(report: EvalReport, directory: Path | None = None) -> Path:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Avalia o pipeline RAG sobre evals/cases.json.")
     parser.add_argument("--mode", choices=["local", "ollama"], default=os.getenv("RAG_MODE", "local"))
-    parser.add_argument("--docs", default=str(ROOT / "docs"), help="diretório do corpus (padrão: docs/)")
+    parser.add_argument("--docs", default=str(ROOT / "corpus"), help="diretório do corpus (padrão: corpus/)")
     parser.add_argument("--cases", default=None, help="arquivo de casos (padrão: evals/cases.json)")
     parser.add_argument("--k", type=int, default=None, help="sobrescreve RAG_TOP_K")
     parser.add_argument("--min-score", type=float, default=None, help="sobrescreve RAG_MIN_SCORE")

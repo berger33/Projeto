@@ -18,7 +18,7 @@
 | orquestração RAG | [`app/rag.py`](app/rag.py) |
 | testes de domínio/API | [`tests/test_rag.py`](tests/test_rag.py) |
 | evals versionados | [`evals/cases.json`](evals/cases.json) |
-| arquitetura | [`ARQUITETURA.md`](ARQUITETURA.md) |
+| arquitetura | [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) · operação: [`docs/OPERACAO.md`](docs/OPERACAO.md) · decisões: [`docs/DECISOES.md`](docs/DECISOES.md) |
 
 ## Arquitetura
 
@@ -128,15 +128,44 @@ Toda resposta de erro tem o mesmo formato e nunca inclui detalhes internos (URL 
 | 503 | `provider_timeout` | Ollama excedeu `OLLAMA_EMBED_TIMEOUT_S` / `OLLAMA_GENERATE_TIMEOUT_S` |
 | 503 | `provider_invalid_response` | Ollama respondeu algo fora do contrato (JSON inválido, resposta vazia, nº de embeddings errado) |
 | 500 | `internal_error` | falha inesperada; o stack trace está no log com o mesmo `request_id` |
+| 401 | `unauthorized` | `API_TOKEN` configurado e credencial ausente/inválida |
+| 429 | `rate_limited` | limite por IP excedido (`Retry-After` informa quando tentar de novo) |
+
+### Cache e concorrência
+
+Respostas são cacheadas em memória (LRU + TTL; `RAG_CACHE_MAX_ENTRIES`, padrão 256, `0` desliga; `RAG_CACHE_TTL_S`, padrão 600 s). A chave ignora caixa, acentos e pontuação e inclui a versão do índice e do prompt — reindexar ou mudar o template invalida tudo. Só respostas e recusas por falta de contexto entram; recusas do modelo não. Um acerto devolve `timings_ms: {"cache": 0}` e um `request_id` novo, e é logado como `query.cached`.
+
+Chamadas ao Ollama passam por um semáforo (`OLLAMA_MAX_CONCURRENCY`, padrão 2): em CPU, requisições além disso esperam na fila em vez de estourar timeout; o tempo de espera aparece como `queue_wait_ms` nos eventos `provider.*`. Cada provider mantém uma única conexão HTTP com keep-alive, fechada no shutdown.
+
+### Segurança (opcional)
+
+A API é tratada como não pública (decisão D5), então nada disto está ligado por padrão:
+
+| Variável | Efeito |
+|---|---|
+| `API_TOKEN` (≥ 16 caracteres) | exige `Authorization: Bearer <token>` em `/api/*` (`401` + `WWW-Authenticate` caso contrário); `/health` e `/ready` continuam livres |
+| `RAG_RATE_LIMIT_PER_MINUTE` (> 0) | token bucket por IP em `POST /api/ask`; excesso → `429` com `Retry-After` e `error_code: rate_limited`. `RAG_RATE_LIMIT_BURST` define a capacidade (padrão = limite/min). Por processo: com N workers o limite efetivo é N× |
+| `RAG_TRUST_PROXY=true` | usa `X-Forwarded-For` como IP do cliente (só atrás de proxy confiável; sem isso o cabeçalho é ignorado) |
+| `RAG_DOCS_ENABLED=false` | desliga `/docs`, `/redoc` e `/openapi.json` |
 
 ### Saúde e prontidão
 
 - `GET /health` — **liveness**: o processo responde. Nunca consulta o Ollama. Inclui `chunks` e `mode` quando o índice existe (compatibilidade).
 - `GET /ready` — **readiness**: `200` só quando o índice tem chunks e, em `RAG_MODE=ollama`, o servidor responde em `/api/tags` com os dois modelos configurados instalados. Caso contrário `503` com `checks` detalhando o que falta (`missing_models`, `error_code`). Use este endpoint em orquestradores para só rotear tráfego quando o serviço puder responder.
 
-### Inicialização
+### Inicialização e índice persistido
 
-O índice é construído **uma única vez** no `lifespan` do FastAPI, antes de o servidor aceitar conexões. Configuração inválida (`RAG_MODE` desconhecido, `RAG_TOP_K` fora de `1..50`, `RAG_MIN_SCORE` fora de `0..1`, URL do Ollama malformada, timeouts fora de `1..600 s`) ou índice impossível de construir (corpus vazio, Ollama inacessível) fazem o processo **encerrar no boot** com a variável problemática no log (`startup.failed`), em vez de servir `500`.
+O índice é construído **uma única vez** no `lifespan` do FastAPI, antes de o servidor aceitar conexões, e **persistido** em `RAG_INDEX_DIR` (padrão `.rag_index/`, ignorado pelo Git): `vectors.npy` (matriz normalizada), `chunks.json` e `manifest.json` (modelo e dimensão dos embeddings, versão e parâmetros do chunking, prefixos de tarefa, `sha256` de cada arquivo do corpus, nº de chunks, data). No boot seguinte o manifesto é comparado com o estado atual: se corpus, modelo e chunking não mudaram, o índice é carregado do disco sem chamar o Ollama; qualquer diferença (arquivo alterado/novo/removido, troca de `OLLAMA_EMBED_MODEL`, prefixos, chunking) reconstrói e regrava, com o motivo no evento `index.rebuilt`. `RAG_INDEX_DIR=` (vazio) desliga a persistência.
+
+```bash
+python -m app.ingest            # (re)indexa a partir de corpus/ (ou CORPUS_DIR) — útil em CI/CD e no build da imagem
+python -m app.ingest --check    # exit 1 se o índice persistido estiver desatualizado
+python -m app.ingest --force    # reconstrói mesmo com manifesto compatível
+```
+
+`RAGService.reload()` reconstrói e troca o índice em uso sem reiniciar o processo (base para um endpoint administrativo protegido por token, opcional).
+
+ Configuração inválida (`RAG_MODE` desconhecido, `RAG_TOP_K` fora de `1..50`, `RAG_MIN_SCORE` fora de `0..1`, URL do Ollama malformada, timeouts fora de `1..600 s`) ou índice impossível de construir (corpus vazio, Ollama inacessível) fazem o processo **encerrar no boot** com a variável problemática no log (`startup.failed`), em vez de servir `500`.
 
 ## Observabilidade
 
@@ -148,11 +177,14 @@ Toda requisição recebe um `X-Request-ID` (gerado, ou reaproveitado do cabeçal
 | `query.retrieved` | após retrieval + filtros | `candidates` (ids e scores do top-k), `selected` |
 | `query.answered` | ao final de cada pergunta | `status` (`answered`, `refused_no_context`, `refused_by_model`), confiança, nº de fontes, `refusal_reason`, `support`, `timings_ms`, `total_ms` |
 | `answer.refused` | quando o gerador respondeu mas a resposta foi recusada | motivo, sustentação medida, se o modelo declarou `grounded`, padrão casado, números não sustentados |
-| `provider.embed` / `provider.generate` | a cada chamada ao Ollama | tokens, `done_reason`, `prompt_version`, se a saída veio estruturada, durações reportadas pelo servidor |
+| `provider.embed` / `provider.generate` | a cada chamada ao Ollama | tokens, `done_reason`, `prompt_version`, se a saída veio estruturada, `queue_wait_ms`, durações reportadas pelo servidor |
+| `query.cached` | resposta servida do cache | status, nº de fontes, estatísticas do cache (hits, misses, hit_rate) |
 | `provider.error` | falha em qualquer etapa | etapa, tipo do erro, stack trace |
 | `http.error` | resposta de erro da API | status, `error_code`, tipo e mensagem interna do erro (o cliente recebe só o genérico) |
 | `http.request` | a cada requisição HTTP | método, path, status, duração (`/health` e `/ready` só em DEBUG) |
 | `settings.loaded` / `startup.failed` | no boot | configuração efetiva (sem credenciais) e origem de cada valor; motivo da falha de boot |
+| `index.loaded` / `index.rebuilt` / `index.reloaded` | no boot ou em `reload()` | índice carregado do disco, ou reconstruído com o motivo (`reason`), ou recarregado sob demanda |
+| `ingest.file` / `ingest.skipped` / `ingest.duplicate` / `ingest.empty` | na ingestão | diagnóstico por arquivo (páginas, linhas, delimitador, hash, chunks), formatos ignorados, duplicatas descartadas |
 | `ready.ollama_unreachable` | em `/ready`, modo Ollama | `error_code` da sonda ao Ollama |
 
 Pergunta e resposta em texto integral (`query.text`) só são registradas em `LOG_LEVEL=DEBUG`, porque perguntas podem conter dados pessoais.
@@ -165,11 +197,11 @@ coverage run -m pytest -q && coverage report
 ruff check app evals tests && ruff format --check app evals tests
 ```
 
-A suíte cobre ingestão CSV, chunking, retrieval, recusa fora da base, rastreabilidade das fontes, validação de entrada, contrato HTTP, o harness de avaliação e a coerência entre `pyproject.toml`, `uv.lock` e os `requirements*.txt`. A CI roda em Python 3.11, 3.12 e 3.13, verifica lint/formatação, cobertura mínima, atualidade do lockfile e vulnerabilidades conhecidas (`pip-audit`).
+A suíte (380+ testes) cobre ingestão de PDF real gerado em teste, CSV, Markdown e texto; chunking (invariantes em textos aleatórios); embeddings e contrato do Ollama simulado (`httpx.MockTransport`: lotes, retry, timeout, 404 de modelo, dimensão inconsistente, `<think>`, `done_reason=length`, JSON inválido); retrieval híbrido e limiares; recusa e sustentação; fontes; cache e concorrência; persistência do índice; ciclo de vida da API, `/ready` e contrato de erro; o harness de avaliação; e a coerência entre `pyproject.toml`, `uv.lock` e os `requirements*.txt`. Piso de cobertura na CI: 85 % (medido: 96 %). Os mutantes que sobreviviam na auditoria (remover `min_score`, confiança sempre alta, citar uma fonte, remover overlap, girar o ranking, 503→500, recusa por prefixo, canal lexical, MMR) são mortos pela suíte; o único que sobrevive — remover o sinal do hash local — é uma limitação documentada do provider de teste (R-07). A CI roda em Python 3.11, 3.12 e 3.13 e falha em: `ruff check`/`ruff format --check`, `mypy --strict` sobre `app/` e `evals/`, cobertura < 85 %, gate do eval local (`tests/test_evals.py`), lockfile desatualizado ou `requirements*.txt` divergentes, vulnerabilidades conhecidas (`pip-audit`), whitespace/marcadores de conflito no diff do PR, e no job `docker`, que constrói a imagem, sobe o contêiner, sonda `/ready` e faz uma pergunta real.
 
 ### Avaliação do RAG (evals)
 
-Os casos ficam em [`evals/cases.json`](evals/cases.json) e são executados sobre o **corpus real** em `docs/`. Cada caso tem categoria (`in_scope`, `partial`, `out_of_scope`, `typo`, `no_accent`, `synonym`, `adversarial`), documentos/chunks esperados, fragmentos obrigatórios e proibidos na resposta e se a resposta deve ou não citar fontes.
+Os casos ficam em [`evals/cases.json`](evals/cases.json) e são executados sobre o **corpus real** em `corpus/`. Cada caso tem categoria (`in_scope`, `partial`, `out_of_scope`, `typo`, `no_accent`, `synonym`, `adversarial`), documentos/chunks esperados, fragmentos obrigatórios e proibidos na resposta e se a resposta deve ou não citar fontes.
 
 ```bash
 python -m evals.run                      # modo local (hash + extrativo): retrieval e recusa, sem LLM
@@ -180,6 +212,8 @@ python -m evals.run --k 8 --min-score 0.3
 
 Métricas reportadas (definições em `evals/harness.py`): `recall@k` e `MRR` dos candidatos do índice, `selected recall` (o que chega ao gerador), `source precision` (fontes citadas que pertencem aos documentos esperados), `correct refusal` (fora de escopo recusado sem fontes), `false refusal` (recusa indevida), `content pass` (verificações de conteúdo) e latência p50/p95, no total e por categoria.
 
+A busca vetorial roda sobre uma matriz `numpy` normalizada (`app/store.py`, interface `VectorStore` plugável): 10 mil chunks × 768 dimensões respondem em < 1 ms, e um filtro por documento/seção/metadado restringe a busca sem reindexar.
+
 O retrieval é **híbrido**: cosseno sobre embeddings e BM25 sobre texto normalizado (sem acentos, stopwords PT-BR, radicais), fundidos por RRF; os filtros de evidência rodam sobre o pool fundido (4·k por canal) antes do corte em k.
 
 #### Limiares por provider
@@ -188,7 +222,11 @@ A escala do cosseno depende do modelo de embedding, então os limiares vêm de u
 
 Para calibrar um provider, `python -m evals.calibrate --mode ollama` executa o retrieval uma vez por caso e varre uma grade de limiares, imprimindo recusa correta × recusa indevida, selected recall e precisão de fontes para cada combinação (o perfil atual aparece destacado). O perfil `local` foi calibrado assim; o perfil `ollama` é **provisório** (derivado da escala típica de modelos densos) até ser medido com o modelo real.
 
+Depois dos filtros, os trechos aprovados passam por **MMR** (diversificação: um quase-duplicado do top-1 não ocupa a vaga de um trecho diferente e relevante), controlado por `mmr_lambda` no perfil (`1.0` = desligado no perfil `local`, onde o cosseno do hash é ruidoso; `0.7` no perfil `ollama`; `RAG_MMR_LAMBDA` sobrescreve). A interface `Reranker` (`app/rerank.py`) permite plugar um reranker real via `RAG_RERANKER`; hoje só existe `noop` — um cross-encoder em CPU custaria 0,3–0,8 s por consulta e só entra se o eval mostrar ≥ 5 p.p. de MRR (decisão D3).
+
 `confidence` combina três sinais: score do top-1 na escala do provider, destaque do top-1 sobre o top-2 (gap relativo) **ou** dois trechos do mesmo documento concordando, e a sustentação medida da resposta (`alta` exige as três; sustentação < 0,6 rebaixa para `baixa`).
+
+O corpus fica em `corpus/` (`CORPUS_DIR` para apontar outro diretório); `docs/` contém a documentação do projeto. O corpus aceita `.pdf`, `.csv`, `.md` e `.txt` (outros formatos são ignorados com aviso). CSV é lido com a biblioteca padrão — delimitador detectado (`,` `;` tab `|`), BOM tolerado, tudo como texto (`00123` não vira `123`); cada linha é indexada com os nomes das colunas (para busca) mas exibida ao gerador e ao usuário só com o conteúdo. Cada arquivo gera um evento `ingest.file` (páginas, páginas sem texto, linhas, delimitador, chunks, hash); arquivo ilegível falha no boot citando o nome. Trechos idênticos ou quase idênticos (Jaccard de radicais ≥ 0,9) entre documentos são deduplicados, mantendo o primeiro na ordem alfabética dos arquivos.
 
 Os PDFs são divididos por **seção** (títulos numerados como `2. Dados coletados`), com cabeçalho/rodapé repetidos removidos, quebras de linha visuais desfeitas e um orçamento de ~300 tokens por chunk (`app/chunking.py`); cada chunk carrega `section`, posição no texto e estimativa de tokens.
 
@@ -215,7 +253,17 @@ Os três arquivos devem ser commitados juntos; a CI falha se `requirements*.txt`
 
 ## Stack
 
-`Python` · `FastAPI` · `Pydantic` · `Pandas` · `PyPDF` · `HTTPX` · `Pytest` · `Docker` · `GitHub Actions` · `Ollama`
+`Python` · `FastAPI` · `Pydantic` · `NumPy` · `PyPDF` · `HTTPX` · `Pytest` · `Docker` · `GitHub Actions` · `Ollama`
+
+## Docker
+
+```bash
+docker compose up --build              # API + Ollama + pull dos modelos (modo ollama, 100 % CPU por padrão)
+RAG_MODE=local docker compose up app   # só a API, modo local
+docker build -t aurora-rag . && docker run -p 8000:8000 aurora-rag   # imagem isolada, modo local
+```
+
+A imagem (`python:3.12-slim`) instala apenas as dependências de runtime travadas pelo lockfile, copia só `app/` e `corpus/` (`.dockerignore` em lista branca — `.git`, `.env`, testes e auditoria ficam fora), roda como usuário não-root (`aurora`, uid 10001), pré-constrói o índice no build para o modo local (boot em ~20 ms) e declara `HEALTHCHECK` em `/health`. O índice persistido fica no volume `/data/index`; no modo ollama ele é (re)construído no primeiro boot contra o servidor e reaproveitado nos seguintes. O `docker-compose.yml` sobe `ollama` com volume de modelos, um serviço `ollama-pull` que baixa os dois modelos uma única vez, e a API só inicia depois disso; a readiness do compose usa `/ready`. Para GPU NVIDIA, descomente o bloco `deploy.resources` do serviço `ollama`.
 
 ## Deploy
 

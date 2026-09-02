@@ -69,7 +69,7 @@ def test_threshold_overrides_are_validated(variable: str) -> None:
 
 
 def test_service_uses_profile_thresholds_in_retriever() -> None:
-    service = RAGService(ROOT / "docs", Settings())
+    service = RAGService(ROOT / "corpus", Settings())
     config = service.retriever.config
     profile = THRESHOLD_PROFILES["local"]
     assert (
@@ -99,7 +99,7 @@ def _selected(*pairs: tuple[str, float]) -> list[RetrievedChunk]:
 
 @pytest.fixture()
 def service() -> RAGService:
-    return RAGService(ROOT / "docs", Settings())
+    return RAGService(ROOT / "corpus", Settings())
 
 
 def test_confidence_high_requires_strong_top_and_distinct_or_agreeing_sources(service: RAGService) -> None:
@@ -140,7 +140,7 @@ def test_confidence_end_to_end_on_real_corpus(service: RAGService, captured: Lis
 
 def test_confidence_distribution_is_not_degenerate() -> None:
     """Regressão do mutante 'confidence sempre alta': o eval local precisa produzir mais de um nível."""
-    service = RAGService(ROOT / "docs", Settings())
+    service = RAGService(ROOT / "corpus", Settings())
     levels = {service.answer(case.question).confidence for case in load_cases() if case.expects_sources is True}
     assert len(levels) >= 2
 
@@ -151,7 +151,7 @@ def test_confidence_distribution_is_not_degenerate() -> None:
 
 
 def test_calibrate_sweep_reproduces_current_profile_outcome() -> None:
-    service = RAGService(ROOT / "docs", Settings())
+    service = RAGService(ROOT / "corpus", Settings())
     cases = load_cases()
     fused = {case.id: service.retriever.fuse(case.question) for case in cases}
     outcome = calibrate.evaluate_thresholds(fused, cases, THRESHOLD_PROFILES["local"], k=5)
@@ -166,7 +166,7 @@ def test_calibrate_sweep_reproduces_current_profile_outcome() -> None:
 
 
 def test_calibrate_ranks_by_correct_then_false_refusal() -> None:
-    service = RAGService(ROOT / "docs", Settings())
+    service = RAGService(ROOT / "corpus", Settings())
     cases = load_cases()
     grid = {"min_score": [0.12, 0.99], "min_lexical_coverage": [0.2]}
     results, _ = calibrate.sweep(service, cases, grid)

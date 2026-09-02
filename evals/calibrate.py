@@ -169,7 +169,7 @@ def _parse_grid(args: argparse.Namespace) -> dict[str, list[float]]:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Calibra limiares de retrieval a partir de evals/cases.json.")
     parser.add_argument("--mode", choices=["local", "ollama"], default=os.getenv("RAG_MODE", "local"))
-    parser.add_argument("--docs", default=str(ROOT / "docs"))
+    parser.add_argument("--docs", default=str(ROOT / "corpus"))
     parser.add_argument("--cases", default=None)
     parser.add_argument("--min-score", dest="min_score", default=None, help="lista separada por vírgula")
     parser.add_argument("--vector-only", dest="vector_only_min_score", default=None)

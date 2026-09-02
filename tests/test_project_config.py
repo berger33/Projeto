@@ -168,7 +168,7 @@ def test_dockerfile_runs_as_non_root_with_healthcheck_and_prebuilt_index(dockerf
     assert "PYTHONUNBUFFERED=1" in dockerfile
     assert (
         "COPY --chown=aurora:aurora app/ ./app/" in dockerfile
-        and "COPY --chown=aurora:aurora docs/ ./docs/" in dockerfile
+        and "COPY --chown=aurora:aurora corpus/ ./corpus/" in dockerfile
     )
     assert "COPY . ." not in dockerfile
     assert "RUN python -m app.ingest --index-dir /data/index" in dockerfile
@@ -184,8 +184,8 @@ def test_dockerignore_whitelists_only_runtime_inputs() -> None:
         if line.strip() and not line.startswith("#")
     ]
     assert rules[0] == "*"
-    assert {"!app/", "!docs/", "!requirements.txt"} <= set(rules)
-    assert not any(rule.startswith("!") and rule not in {"!app/", "!docs/", "!requirements.txt"} for rule in rules)
+    assert {"!app/", "!corpus/", "!requirements.txt"} <= set(rules)
+    assert not any(rule.startswith("!") and rule not in {"!app/", "!corpus/", "!requirements.txt"} for rule in rules)
 
 
 def test_compose_runs_ollama_mode_with_model_pull_and_volumes() -> None:
@@ -204,3 +204,30 @@ def test_compose_runs_ollama_mode_with_model_pull_and_volumes() -> None:
     pull = " ".join(services["ollama-pull"]["command"])
     assert "ollama pull" in pull and "nomic-embed-text-v2-moe" in pull and "qwen3:1.7b" in pull
     assert set(compose["volumes"]) == {"ollama-models", "rag-index"}
+
+
+# ---------------------------------------------------------------------------
+# P3-05: corpus/ vs docs/ (D9)
+# ---------------------------------------------------------------------------
+
+
+def test_corpus_lives_in_corpus_dir_and_docs_holds_documentation() -> None:
+    assert (ROOT / "corpus" / "faq.csv").exists() and not (ROOT / "docs" / "faq.csv").exists()
+    for name in ("ARQUITETURA.md", "OPERACAO.md", "DECISOES.md"):
+        assert (ROOT / "docs" / name).exists(), name
+    assert not (ROOT / "ARQUITETURA.md").exists()
+
+
+def test_corpus_dir_is_configurable(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.config import Settings
+    from app.main import build_service
+
+    assert Settings().corpus_dir == "corpus"
+    corpus = tmp_path / "meu_corpus"
+    corpus.mkdir()
+    (corpus / "a.txt").write_text("O prazo de devolução é de 10 dias corridos após o recebimento.", encoding="utf-8")
+    monkeypatch.setenv("RAG_MODE", "local")
+    monkeypatch.setenv("CORPUS_DIR", str(corpus))
+    service = build_service()
+    assert service.docs_dir == corpus and service.chunk_count == 1
+    assert Settings.from_env({"CORPUS_DIR": "corpus"}).public_dict()["corpus_dir"] == "corpus"

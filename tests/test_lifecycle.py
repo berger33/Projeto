@@ -305,7 +305,7 @@ def test_build_service_reads_environment_and_logs_effective_settings(
     monkeypatch.setenv("RAG_MODE", "local")
     monkeypatch.setenv("RAG_TOP_K", "7")
     monkeypatch.setenv("OLLAMA_BASE_URL", "http://user:secret@ollama.interno:11434")
-    service = build_service()  # usa o corpus real em docs/
+    service = build_service()  # usa o corpus real em corpus/
     assert service.settings.retrieval_k == 7 and service.chunk_count > 0
     (event,) = captured.events("settings.loaded")
     assert event["settings"]["retrieval_k"] == 7 and event["source"]["RAG_TOP_K"] == "env"

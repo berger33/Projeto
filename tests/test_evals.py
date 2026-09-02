@@ -3,9 +3,9 @@
 Três camadas:
 
 1. Unidade do harness com um serviço fake (métricas calculadas corretamente, casos de erro).
-2. Integridade de ``evals/cases.json`` contra o corpus ``docs/`` (ids existem, fragmentos são
+2. Integridade de ``evals/cases.json`` contra o corpus ``corpus/`` (ids existem, fragmentos são
    alcançáveis, categorias válidas).
-3. Gate de regressão: roda os 53 casos em modo ``local`` sobre ``docs/`` e compara com os pisos
+3. Gate de regressão: roda os 53 casos em modo ``local`` sobre ``corpus/`` e compara com os pisos
    de ``evals/thresholds.json`` (baseline medida em P0-03). O gate do modo ``ollama`` só roda com
    ``RAG_EVAL_OLLAMA=1`` e servidor acessível.
 """
@@ -36,7 +36,7 @@ from evals.harness import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-DOCS = ROOT / "docs"
+DOCS = ROOT / "corpus"
 THRESHOLDS = json.loads((ROOT / "evals" / "thresholds.json").read_text(encoding="utf-8"))
 
 
@@ -289,7 +289,7 @@ def test_cases_reference_existing_chunks_and_reachable_fragments(
     documents = {chunk.source for chunk in real_chunks.values()}
     for case in real_cases:
         for document in case.expected_sources:
-            assert document in documents, f"{case.id}: documento {document} não existe em docs/"
+            assert document in documents, f"{case.id}: documento {document} não existe em corpus/"
         for chunk_id in case.expected_chunk_ids:
             assert chunk_id in real_chunks, f"{case.id}: chunk {chunk_id} não existe"
             assert chunk_id.split(":", 1)[0] in case.expected_sources, f"{case.id}: {chunk_id} fora de expected_sources"
@@ -305,7 +305,7 @@ def test_cases_reference_existing_chunks_and_reachable_fragments(
 
 
 # ---------------------------------------------------------------------------
-# 3. Gate de regressão sobre docs/ (modo local) e gate opcional Ollama
+# 3. Gate de regressão sobre corpus/ (modo local) e gate opcional Ollama
 # ---------------------------------------------------------------------------
 
 

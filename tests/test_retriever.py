@@ -140,7 +140,7 @@ def test_accepts_requires_evidence_levels() -> None:
 
 
 def test_accents_and_inflections_no_longer_block_retrieval() -> None:
-    service = RAGService(ROOT / "docs", Settings())
+    service = RAGService(ROOT / "corpus", Settings())
     for question in ("qual o prazo de devolucao", "posso pagar com cartao", "reembolsos demoram quanto"):
         result = service.run(question)
         assert result.retrieval.selected, question
@@ -148,7 +148,7 @@ def test_accents_and_inflections_no_longer_block_retrieval() -> None:
 
 
 def test_out_of_scope_questions_sharing_generic_terms_are_refused() -> None:
-    service = RAGService(ROOT / "docs", Settings())
+    service = RAGService(ROOT / "corpus", Settings())
     for question in (
         "Qual é o horário de funcionamento da loja física no shopping?",
         "Como faço para trocar a senha da minha conta?",
@@ -161,7 +161,7 @@ def test_out_of_scope_questions_sharing_generic_terms_are_refused() -> None:
 
 
 def test_retrieved_event_exposes_fusion_diagnostics(captured) -> None:
-    service = RAGService(ROOT / "docs", Settings())
+    service = RAGService(ROOT / "corpus", Settings())
     service.answer("Qual é o prazo para devolver uma compra?")
     (event,) = captured.events("query.retrieved")
     assert event["pool"] >= 5
@@ -175,6 +175,6 @@ def test_vector_only_threshold_is_configurable_and_validated() -> None:
     assert settings.vector_only_min_score == 0.7
     with pytest.raises(ConfigError, match="RAG_VECTOR_ONLY_MIN_SCORE"):
         Settings(vector_only_min_score=1.5)
-    service = RAGService(ROOT / "docs", settings)
+    service = RAGService(ROOT / "corpus", settings)
     assert service.retriever.config.vector_only_min_score == 0.7
     assert service.retriever.config.k == settings.retrieval_k

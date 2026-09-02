@@ -277,7 +277,7 @@ def test_invariants_hold_on_random_texts(seed: int) -> None:
 
 
 def test_real_corpus_yields_one_chunk_per_section_without_boilerplate() -> None:
-    chunks = load_chunks(ROOT / "docs")
+    chunks = load_chunks(ROOT / "corpus")
     pdf_chunks = [chunk for chunk in chunks if chunk.source.endswith(".pdf")]
     assert len(pdf_chunks) == 19  # 7 FAQ + 6 privacidade + 6 reembolso
     for chunk in pdf_chunks:
