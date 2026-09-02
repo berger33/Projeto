@@ -102,6 +102,12 @@ class Settings:
     cache_max_entries: int = 256
     cache_ttl_s: float = 600.0
     ollama_max_concurrency: int = 2
+    # Segurança (D5: API não pública → tudo desligado por padrão). Ver app/security.py.
+    api_token: str = ""
+    rate_limit_per_minute: int = 0
+    rate_limit_burst: int | None = None
+    trust_proxy: bool = False
+    docs_enabled: bool = True
     # Diretório do índice persistido (.npy + manifest). "" desabilita a persistência (reembeda a cada boot).
     # O default lê RAG_INDEX_DIR mesmo em construção direta, para que testes/CLIs isolem o índice.
     index_dir: str = field(default_factory=lambda: _read_index_dir(os.environ))
@@ -146,6 +152,22 @@ class Settings:
             errors.append(f"RAG_MMR_LAMBDA={self.mmr_lambda!r}: faixa aceita 0.0..1.0")
         if not self.reranker.strip():
             errors.append("RAG_RERANKER: não pode ser vazio (use 'noop')")
+        if (
+            not isinstance(self.rate_limit_per_minute, int)
+            or isinstance(self.rate_limit_per_minute, bool)
+            or not 0 <= self.rate_limit_per_minute <= 100_000
+        ):
+            errors.append(
+                f"RAG_RATE_LIMIT_PER_MINUTE={self.rate_limit_per_minute!r}: faixa aceita 0..100000 (0 desliga)"
+            )
+        if self.rate_limit_burst is not None and (
+            not isinstance(self.rate_limit_burst, int)
+            or isinstance(self.rate_limit_burst, bool)
+            or not 1 <= self.rate_limit_burst <= 100_000
+        ):
+            errors.append(f"RAG_RATE_LIMIT_BURST={self.rate_limit_burst!r}: faixa aceita 1..100000")
+        if self.api_token and len(self.api_token) < 16:
+            errors.append("API_TOKEN: use pelo menos 16 caracteres")
         if (
             not isinstance(self.cache_max_entries, int)
             or isinstance(self.cache_max_entries, bool)
@@ -220,6 +242,11 @@ class Settings:
             cache_max_entries=_parse_int("RAG_CACHE_MAX_ENTRIES", read("RAG_CACHE_MAX_ENTRIES", "256")),
             cache_ttl_s=_parse_float("RAG_CACHE_TTL_S", read("RAG_CACHE_TTL_S", "600")),
             ollama_max_concurrency=_parse_int("OLLAMA_MAX_CONCURRENCY", read("OLLAMA_MAX_CONCURRENCY", "2")),
+            api_token=(env.get("API_TOKEN") or "").strip(),
+            rate_limit_per_minute=_parse_int("RAG_RATE_LIMIT_PER_MINUTE", read("RAG_RATE_LIMIT_PER_MINUTE", "0")),
+            rate_limit_burst=_parse_optional_int("RAG_RATE_LIMIT_BURST", env),
+            trust_proxy=_parse_bool("RAG_TRUST_PROXY", read("RAG_TRUST_PROXY", "false")),
+            docs_enabled=_parse_bool("RAG_DOCS_ENABLED", read("RAG_DOCS_ENABLED", "true")),
             index_dir=_read_index_dir(env),
             source=source,
         )
@@ -265,6 +292,11 @@ class Settings:
             "cache_ttl_s": self.cache_ttl_s,
             "ollama_max_concurrency": self.ollama_max_concurrency,
             "index_dir": self.index_dir or None,
+            "api_token_enabled": bool(self.api_token),
+            "rate_limit_per_minute": self.rate_limit_per_minute or None,
+            "rate_limit_burst": self.rate_limit_burst,
+            "trust_proxy": self.trust_proxy,
+            "docs_enabled": self.docs_enabled,
         }
 
 
@@ -282,6 +314,22 @@ def _split_host_port(base_url: str) -> tuple[str, int | None] | None:
 
 def _is_number(value: object) -> bool:
     return isinstance(value, int | float) and not isinstance(value, bool) and value == value  # exclui NaN
+
+
+def _parse_bool(name: str, raw: str) -> bool:
+    value = raw.strip().lower()
+    if value in {"1", "true", "yes", "on"}:
+        return True
+    if value in {"0", "false", "no", "off"}:
+        return False
+    raise ConfigError(f"Configuração inválida: {name}={raw!r}: use true ou false")
+
+
+def _parse_optional_int(name: str, env: Mapping[str, str]) -> int | None:
+    raw = env.get(name)
+    if raw is None or not raw.strip():
+        return None
+    return _parse_int(name, raw.strip())
 
 
 def _read_index_dir(env: Mapping[str, str]) -> str:

@@ -17,6 +17,7 @@ from .domain import AnswerStatus, Confidence
 from .errors import AuroraError, IndexNotReadyError
 from .observability import RequestContextMiddleware, configure_logging, get_request_id, log_event
 from .rag import RAGService
+from .security import SecurityMiddleware, TokenBucketLimiter
 
 BASE = Path(__file__).resolve().parents[1]
 logger = logging.getLogger(__name__)
@@ -85,16 +86,26 @@ def build_service() -> RAGService:
     return RAGService(BASE / "docs", settings)
 
 
-def create_app(service: RAGService | None = None, *, service_factory: ServiceFactory | None = None) -> FastAPI:
+def create_app(
+    service: RAGService | None = None,
+    *,
+    service_factory: ServiceFactory | None = None,
+    security: Settings | None = None,
+) -> FastAPI:
     """Cria a aplicação.
 
     ``service`` (testes) injeta um serviço já construído. Caso contrário ``service_factory`` (padrão
     ``build_service``) roda **uma única vez** no ``lifespan``, antes de o servidor aceitar conexões.
     Se falhar, o processo não sobe: o erro é logado (``startup.failed``) e propagado para o uvicorn
     encerrar com código de saída ≠ 0 (Fase 2, G-01/G-03).
+
+    ``security`` define token/rate limit/docs (padrão: ``service.settings`` quando injetado, senão o
+    ambiente). É lida na criação da app — antes do lifespan — porque middlewares e rotas de docs
+    precisam existir desde o início.
     """
     configure_logging()
     factory = service_factory or build_service
+    security_settings = security or (service.settings if service is not None else Settings.from_env())
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -118,8 +129,28 @@ def create_app(service: RAGService | None = None, *, service_factory: ServiceFac
         description="RAG documental com retrieval vetorial, geração local opcional e citações.",
         lifespan=lifespan,
         responses={503: {"model": ErrorResponse}},
+        docs_url="/docs" if security_settings.docs_enabled else None,
+        redoc_url="/redoc" if security_settings.docs_enabled else None,
+        openapi_url="/openapi.json" if security_settings.docs_enabled else None,
     )
     app.state.rag = service  # serviço injetado fica disponível mesmo sem o lifespan (TestClient sem `with`)
+    # Ordem: o último add_middleware é o mais externo → RequestContext envolve Security (request_id nos 401/429).
+    limiter = (
+        TokenBucketLimiter(
+            per_minute=security_settings.rate_limit_per_minute,
+            burst=security_settings.rate_limit_burst or security_settings.rate_limit_per_minute,
+        )
+        if security_settings.rate_limit_per_minute > 0
+        else None
+    )
+    if limiter is not None or security_settings.api_token:
+        app.add_middleware(
+            SecurityMiddleware,
+            api_token=security_settings.api_token,
+            limiter=limiter,
+            trust_proxy=security_settings.trust_proxy,
+        )
+    app.state.limiter = limiter
     app.add_middleware(RequestContextMiddleware)
 
     def get_service(request: Request) -> RAGService:
