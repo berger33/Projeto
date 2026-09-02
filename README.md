@@ -61,7 +61,7 @@ uvicorn app.main:app --reload
 
 Com [uv](https://docs.astral.sh/uv/) instalado, o equivalente é `uv sync` (cria `.venv` com runtime + dev) e `uv run uvicorn app.main:app --reload`.
 
-Abra `http://127.0.0.1:8000` ou `/docs`.
+Abra `http://127.0.0.1:8000` (interface mínima servida de `app/static/`, que consome a própria API) ou `/docs`.
 
 ### RAG generativo com Ollama
 
@@ -219,7 +219,7 @@ Os três arquivos devem ser commitados juntos; a CI falha se `requirements*.txt`
 
 ## Deploy
 
-O repositório mantém configuração de container/deploy. Uma URL pública de backend só será anunciada quando a aplicação estiver realmente implantada e monitorada; a demo HTML não é apresentada como substituta do backend.
+O repositório mantém configuração de container/deploy. Uma URL pública de backend só será anunciada quando a aplicação estiver realmente implantada e monitorada. A interface em `/` (`app/static/`) é um cliente fino da própria API — mostra status, confiança, fontes com trecho e `request_id` — e não existe demo estática separada.
 
 ## Uso de IA no desenvolvimento
 

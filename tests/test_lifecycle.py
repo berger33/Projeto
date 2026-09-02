@@ -526,3 +526,32 @@ def test_ask_accepts_question_with_line_breaks_end_to_end(service: RAGService) -
         response = client.post("/api/ask", json={"question": "Qual o prazo\nde devolução?"})
     assert response.status_code == 200
     assert "10 dias" in response.json()["answer"]
+
+
+# ---------------------------------------------------------------------------
+# P3-04: UI servida de app/static (G-09, G-17) e demo removida (G-23, D7)
+# ---------------------------------------------------------------------------
+
+
+def test_home_serves_static_ui_with_real_api_client(service: RAGService) -> None:
+    with TestClient(create_app(service)) as client:
+        home = client.get("/")
+        assert home.status_code == 200 and "text/html" in home.headers["content-type"]
+        assert '<script src="/static/app.js" defer>' in home.text and 'href="/static/app.css"' in home.text
+        js = client.get("/static/app.js")
+        assert js.status_code == 200
+        # O cliente usa a API real e trata os campos novos; nada de KB embutida nem strings com '\\n' literal.
+        assert 'fetch("/api/ask"' in js.text and "refusal_reason" in js.text and "excerpt" in js.text
+        assert "\\\\n" not in js.text and "X-Request-ID" in js.text
+        assert client.get("/static/app.css").status_code == 200
+        assert client.get("/static/inexistente.js").status_code == 404
+    assert not (Path(__file__).resolve().parents[1] / "demo").exists()
+    assert (
+        "<!doctype" not in (Path(__file__).resolve().parents[1] / "app" / "main.py").read_text(encoding="utf-8").lower()
+    )
+
+
+def test_home_is_not_in_openapi_schema(service: RAGService) -> None:
+    with TestClient(create_app(service)) as client:
+        paths = client.get("/openapi.json").json()["paths"]
+    assert "/" not in paths and "/api/ask" in paths and "/ready" in paths
