@@ -1,0 +1,34 @@
+{
+  "_comment": "Pisos aplicados por tests/test_evals.py sobre as métricas de evals/harness.py. 'local' = baseline medida em 2026-09-02 (P0-03) no modo hash+extrativo; é um gate de regressão e deve SUBIR a cada item que melhorar o pipeline (o diff deste arquivo documenta o ganho). 'ollama' = critérios de aceite da Fase 3 §4 para o modo principal; o teste correspondente só roda com RAG_EVAL_OLLAMA=1 e servidor acessível, e é esperado que falhe até a Onda 1 estar completa.",
+  "local": {
+    "measured_baseline": {
+      "date": "2026-09-02",
+      "commit_item": "P0-03",
+      "recall_at_k": 0.9333,
+      "selected_recall": 0.8667,
+      "mrr": 0.7333,
+      "source_precision": 0.7088,
+      "correct_refusal_rate": 0.5,
+      "false_refusal_rate": 0.025,
+      "content_pass_rate": 0.5849
+    },
+    "recall_at_k": { "min": 0.9 },
+    "selected_recall": { "min": 0.85 },
+    "mrr": { "min": 0.7 },
+    "source_precision": { "min": 0.7 },
+    "correct_refusal_rate": { "min": 0.5 },
+    "false_refusal_rate": { "max": 0.05 },
+    "content_pass_rate": { "min": 0.55 },
+    "latency_p95_ms": { "max": 100 }
+  },
+  "ollama": {
+    "recall_at_k": { "min": 0.9 },
+    "selected_recall": { "min": 0.85 },
+    "mrr": { "min": 0.75 },
+    "source_precision": { "min": 0.9 },
+    "correct_refusal_rate": { "min": 1.0 },
+    "false_refusal_rate": { "max": 0.05 },
+    "content_pass_rate": { "min": 0.9 },
+    "latency_p95_ms": { "max": 6000 }
+  }
+}

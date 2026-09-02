@@ -33,3 +33,23 @@ class RAGAnswer:
     mode: str
     request_id: str | None = None
     timings_ms: dict[str, float] = field(default_factory=dict)
+    # "answered" | "refused_no_context" | "refused_by_model" (vira Enum em P1-01)
+    status: str = "answered"
+
+
+@dataclass(frozen=True)
+class Retrieval:
+    """Rastro do retrieval de uma pergunta: candidatos devolvidos pelo índice (top-k, em ordem)
+    e o subconjunto que passou nos filtros e foi entregue ao gerador."""
+
+    candidates: list[RetrievedChunk]
+    selected: list[RetrievedChunk]
+
+
+@dataclass(frozen=True)
+class RAGRun:
+    """Resultado completo de uma execução do pipeline: resposta final + rastro do retrieval.
+    Usado por avaliação e diagnóstico; a API expõe apenas ``answer``."""
+
+    answer: RAGAnswer
+    retrieval: Retrieval

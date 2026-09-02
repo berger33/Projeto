@@ -111,10 +111,25 @@ Pergunta e resposta em texto integral (`query.text`) só são registradas em `LO
 ```bash
 pytest -q                      # suíte (configuração em pyproject.toml; não precisa de PYTHONPATH)
 coverage run -m pytest -q && coverage report
-ruff check app tests && ruff format --check app tests
+ruff check app evals tests && ruff format --check app evals tests
 ```
 
-A suíte cobre ingestão CSV, chunking, retrieval, recusa fora da base, rastreabilidade das fontes, validação de entrada, contrato HTTP, casos de comportamento versionados e a coerência entre `pyproject.toml`, `uv.lock` e os `requirements*.txt`. A CI roda em Python 3.11, 3.12 e 3.13, verifica lint/formatação, cobertura mínima, atualidade do lockfile e vulnerabilidades conhecidas (`pip-audit`).
+A suíte cobre ingestão CSV, chunking, retrieval, recusa fora da base, rastreabilidade das fontes, validação de entrada, contrato HTTP, o harness de avaliação e a coerência entre `pyproject.toml`, `uv.lock` e os `requirements*.txt`. A CI roda em Python 3.11, 3.12 e 3.13, verifica lint/formatação, cobertura mínima, atualidade do lockfile e vulnerabilidades conhecidas (`pip-audit`).
+
+### Avaliação do RAG (evals)
+
+Os casos ficam em [`evals/cases.json`](evals/cases.json) e são executados sobre o **corpus real** em `docs/`. Cada caso tem categoria (`in_scope`, `partial`, `out_of_scope`, `typo`, `no_accent`, `synonym`, `adversarial`), documentos/chunks esperados, fragmentos obrigatórios e proibidos na resposta e se a resposta deve ou não citar fontes.
+
+```bash
+python -m evals.run                      # modo local (hash + extrativo): retrieval e recusa, sem LLM
+python -m evals.run --mode ollama --save # modo principal; grava evals/results/<timestamp>-ollama.json
+python -m evals.run --show-failures      # mostra resposta, candidatos e fontes dos casos reprovados
+python -m evals.run --k 8 --min-score 0.3
+```
+
+Métricas reportadas (definições em `evals/harness.py`): `recall@k` e `MRR` dos candidatos do índice, `selected recall` (o que chega ao gerador), `source precision` (fontes citadas que pertencem aos documentos esperados), `correct refusal` (fora de escopo recusado sem fontes), `false refusal` (recusa indevida), `content pass` (verificações de conteúdo) e latência p50/p95, no total e por categoria.
+
+`tests/test_evals.py` roda os casos em modo local a cada `pytest` e compara com os pisos de [`evals/thresholds.json`](evals/thresholds.json) — a baseline medida em P0-03 vira gate de regressão e deve subir a cada melhoria do pipeline. O gate do modo Ollama (critérios de aceite do plano) só roda com `RAG_EVAL_OLLAMA=1 pytest -m ollama` e um servidor acessível em `OLLAMA_BASE_URL`; sem isso é pulado. Os relatórios em `evals/results/` não são versionados.
 
 ### Atualizar dependências
 

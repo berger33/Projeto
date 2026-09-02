@@ -27,17 +27,21 @@ jobs:
       - name: Install locked dependencies
         run: python -m pip install -r requirements.txt -r requirements-dev.txt
       - name: Lint
-        run: ruff check app tests
+        run: ruff check app evals tests
       - name: Format check
-        run: ruff format --check app tests
+        run: ruff format --check app evals tests
       - name: Compile Python
-        run: python -m compileall -q app tests
+        run: python -m compileall -q app evals tests
       - name: Tests with coverage floor
         run: |
           coverage run -m pytest -q
           coverage report
       - name: Validate eval JSON
-        run: python -m json.tool evals/cases.json >/dev/null
+        run: |
+          python -m json.tool evals/cases.json >/dev/null
+          python -m json.tool evals/thresholds.json >/dev/null
+      - name: Eval report (local mode, informative)
+        run: python -m evals.run --mode local
 
   lockfile:
     # Garante que requirements*.txt foram regenerados a partir do uv.lock (fonte única de verdade).

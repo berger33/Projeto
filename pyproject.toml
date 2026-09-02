@@ -47,13 +47,16 @@ package = false
 pythonpath = ["."]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
+markers = [
+  "ollama: exige um servidor Ollama acessível em OLLAMA_BASE_URL e RAG_EVAL_OLLAMA=1 (pulado por padrão)",
+]
 filterwarnings = [
   "error::DeprecationWarning:app.*",
 ]
 
 [tool.coverage.run]
 branch = true
-source = ["app"]
+source = ["app", "evals"]
 
 [tool.coverage.report]
 show_missing = true

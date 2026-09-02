@@ -7,7 +7,7 @@ from pathlib import Path
 
 from .config import Settings
 from .documents import load_chunks
-from .domain import RAGAnswer, RetrievedChunk, SourceRef
+from .domain import RAGAnswer, RAGRun, Retrieval, RetrievedChunk, SourceRef
 from .embeddings import HashEmbeddingProvider, OllamaEmbeddingProvider
 from .generation import ExtractiveGenerator, OllamaGenerator
 from .observability import Timings, get_request_id, log_event, request_context
@@ -91,13 +91,39 @@ class RAGService:
         return len(self.index.chunks)
 
     def answer(self, question: str) -> RAGAnswer:
-        # Fora de uma requisição HTTP (CLI, evals, testes) cada resposta ganha o próprio request_id.
-        if get_request_id() is not None:
-            return self._answer(question)
-        with request_context():
-            return self._answer(question)
+        return self.run(question).answer
 
-    def _answer(self, question: str) -> RAGAnswer:
+    def run(self, question: str) -> RAGRun:
+        """Executa o pipeline completo e devolve a resposta junto com o rastro do retrieval."""
+        # Fora de uma requisição HTTP (CLI, evals, testes) cada execução ganha o próprio request_id.
+        if get_request_id() is not None:
+            return self._run(question)
+        with request_context():
+            return self._run(question)
+
+    def _retrieve(self, question: str, timings: Timings) -> Retrieval:
+        with timings.stage("retrieve"):
+            candidates = self.index.search(question, k=self.settings.retrieval_k)
+        with timings.stage("filter"):
+            question_terms = _terms(question)
+            selected = [
+                item
+                for item in candidates
+                if item.score >= self.settings.min_score and question_terms & _terms(item.chunk.text)
+            ]
+        log_event(
+            logger,
+            logging.INFO,
+            "query.retrieved",
+            question_chars=len(question),
+            k=self.settings.retrieval_k,
+            min_score=self.settings.min_score,
+            candidates=[{"id": item.chunk.id, "score": round(item.score, 4)} for item in candidates],
+            selected=[item.chunk.id for item in selected],
+        )
+        return Retrieval(candidates=candidates, selected=selected)
+
+    def _run(self, question: str) -> RAGRun:
         question = question.strip()
         if not question:
             raise ValueError("A pergunta não pode ser vazia.")
@@ -105,25 +131,8 @@ class RAGService:
         request_id = get_request_id()
         started = time.perf_counter()
         try:
-            with timings.stage("retrieve"):
-                ranked = self.index.search(question, k=self.settings.retrieval_k)
-            with timings.stage("filter"):
-                question_terms = _terms(question)
-                selected = [
-                    item
-                    for item in ranked
-                    if item.score >= self.settings.min_score and question_terms & _terms(item.chunk.text)
-                ]
-            log_event(
-                logger,
-                logging.INFO,
-                "query.retrieved",
-                question_chars=len(question),
-                k=self.settings.retrieval_k,
-                min_score=self.settings.min_score,
-                candidates=[{"id": item.chunk.id, "score": round(item.score, 4)} for item in ranked],
-                selected=[item.chunk.id for item in selected],
-            )
+            retrieval = self._retrieve(question, timings)
+            selected = retrieval.selected
             if not selected:
                 result = RAGAnswer(
                     answer=REFUSAL_TEXT,
@@ -132,9 +141,10 @@ class RAGService:
                     mode=self.generator.mode,
                     request_id=request_id,
                     timings_ms=timings.as_dict(),
+                    status="refused_no_context",
                 )
-                self._log_answer(question, result, status="refused_no_context", started=started)
-                return result
+                self._log_answer(question, result, started=started)
+                return RAGRun(answer=result, retrieval=retrieval)
             with timings.stage("generate"):
                 answer = self.generator.generate(question, selected)
             if answer.lower().startswith("não encontrei informação suficiente"):
@@ -145,9 +155,10 @@ class RAGService:
                     mode=self.generator.mode,
                     request_id=request_id,
                     timings_ms=timings.as_dict(),
+                    status="refused_by_model",
                 )
-                self._log_answer(question, result, status="refused_by_model", started=started)
-                return result
+                self._log_answer(question, result, started=started)
+                return RAGRun(answer=result, retrieval=retrieval)
             result = RAGAnswer(
                 answer=answer,
                 sources=self._sources(selected),
@@ -155,9 +166,10 @@ class RAGService:
                 mode=self.generator.mode,
                 request_id=request_id,
                 timings_ms=timings.as_dict(),
+                status="answered",
             )
-            self._log_answer(question, result, status="answered", started=started)
-            return result
+            self._log_answer(question, result, started=started)
+            return RAGRun(answer=result, retrieval=retrieval)
         except Exception as exc:
             log_event(
                 logger,
@@ -182,12 +194,12 @@ class RAGService:
                 sources.append(ref)
         return sources
 
-    def _log_answer(self, question: str, result: RAGAnswer, *, status: str, started: float) -> None:
+    def _log_answer(self, question: str, result: RAGAnswer, *, started: float) -> None:
         log_event(
             logger,
             logging.INFO,
             "query.answered",
-            status=status,
+            status=result.status,
             mode=result.mode,
             confidence=result.confidence,
             sources=len(result.sources),
