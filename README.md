@@ -91,7 +91,9 @@ OLLAMA_GENERATE_TIMEOUT_S=60     # opcional (1..600); em CPU, modelos maiores po
 {"question":"Qual é o prazo para devolução?"}
 ```
 
-A resposta contém `answer`, `sources`, `confidence`, `mode`, `request_id` e `timings_ms` (ms por etapa: `retrieve`, `filter`, `generate`). Fontes são derivadas dos chunks realmente selecionados e preservam documento/página/linha quando disponíveis.
+A resposta contém `answer`, `sources`, `confidence`, `mode`, `request_id`, `timings_ms` (ms por etapa: `retrieve`, `filter`, `generate`, `verify`), `status` e `refusal_reason`. Fontes são derivadas dos chunks realmente selecionados e preservam documento/página/linha quando disponíveis.
+
+`status` distingue `answered`, `refused_no_context` (nenhum trecho passou nos filtros de retrieval) e `refused_by_model` (o gerador recusou ou a resposta não passou na verificação). Toda recusa devolve o mesmo texto canônico, `sources: []` e `confidence: "baixa"`; `refusal_reason` explica o motivo: `declared` (o modelo declarou não ter sustentação), `pattern` (formulação de recusa reconhecida), `unsupported` (resposta com pouca sobreposição com o contexto), `unsupported_numbers` (prazo/valor/percentual ausente das fontes) ou `no_context`.
 
 A pergunta é normalizada (`strip`) e precisa ter de 2 a 2000 caracteres; caracteres de controle (exceto quebra de linha e tab) são rejeitados com `422`.
 
@@ -129,8 +131,9 @@ Toda requisição recebe um `X-Request-ID` (gerado, ou reaproveitado do cabeçal
 |---|---|---|
 | `index.built` / `index.error` | ao construir o índice | documentos, chunks, dimensão, modelos, duração |
 | `query.retrieved` | após retrieval + filtros | `candidates` (ids e scores do top-k), `selected` |
-| `query.answered` | ao final de cada pergunta | `status` (`answered`, `refused_no_context`, `refused_by_model`), confiança, nº de fontes, `timings_ms`, `total_ms` |
-| `provider.embed` / `provider.generate` | a cada chamada ao Ollama | tokens, `done_reason`, durações reportadas pelo servidor |
+| `query.answered` | ao final de cada pergunta | `status` (`answered`, `refused_no_context`, `refused_by_model`), confiança, nº de fontes, `refusal_reason`, `support`, `timings_ms`, `total_ms` |
+| `answer.refused` | quando o gerador respondeu mas a resposta foi recusada | motivo, sustentação medida, se o modelo declarou `grounded`, padrão casado, números não sustentados |
+| `provider.embed` / `provider.generate` | a cada chamada ao Ollama | tokens, `done_reason`, `prompt_version`, se a saída veio estruturada, durações reportadas pelo servidor |
 | `provider.error` | falha em qualquer etapa | etapa, tipo do erro, stack trace |
 | `http.error` | resposta de erro da API | status, `error_code`, tipo e mensagem interna do erro (o cliente recebe só o genérico) |
 | `http.request` | a cada requisição HTTP | método, path, status, duração (`/health` e `/ready` só em DEBUG) |
@@ -181,7 +184,7 @@ Os três arquivos devem ser commitados juntos; a CI falha se `requirements*.txt`
 - **Providers substituíveis.** Embeddings e geração usam interfaces simples.
 - **Transparência.** O modo offline é extrativo; somente o modo Ollama é descrito como generativo.
 - **Falha explícita.** Erro de provider retorna `503` com `error_code` estável, não sucesso inventado; configuração inválida derruba o boot, não a primeira requisição.
-- **Recusa antes de citação.** Perguntas sem contexto suficiente não recebem fontes arbitrárias.
+- **Recusa antes de citação.** Perguntas sem contexto suficiente não recebem fontes arbitrárias. A recusa não depende de uma frase exata do modelo: o gerador Ollama responde em JSON (`answer`, `grounded`, `used_sources`) e, independentemente disso, a resposta passa por um classificador de recusa em PT-BR e por uma verificação de sustentação (tokens de conteúdo e quantidades precisam existir no contexto). Só respostas que passam recebem fontes.
 
 ## Stack
 

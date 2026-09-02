@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 from tests.conftest import ListHandler
 
 from app.config import Settings
-from app.domain import RetrievedChunk
+from app.domain import Generation, RetrievedChunk
 from app.embeddings import OllamaEmbeddingProvider
 from app.errors import ProviderUnavailableError
 from app.generation import OllamaGenerator
@@ -183,7 +183,7 @@ def test_answer_emits_retrieved_and_answered_events_with_stage_timings(
     assert all({"id", "score"} <= set(item) for item in retrieved["candidates"])
     assert retrieved["selected"] and retrieved["selected"][0] == "faq.csv:r2"
     assert answered["status"] == "answered" and answered["sources"] == 1
-    assert set(answered["timings_ms"]) == {"retrieve", "filter", "generate"}
+    assert set(answered["timings_ms"]) == {"retrieve", "filter", "generate", "verify"}
     assert answered["total_ms"] >= sum(answered["timings_ms"].values()) * 0.5
     assert result.timings_ms == answered["timings_ms"]
     # Fora de uma requisição HTTP, a resposta ganha o próprio request_id e ele aparece nos eventos.
@@ -201,13 +201,16 @@ def test_refusal_by_model_is_logged_with_status(service: RAGService, captured: L
     class RefusingGenerator:
         mode = "stub"
 
-        def generate(self, question: str, context: list[RetrievedChunk]) -> str:
-            return "Não encontrei informação suficiente na documentação."
+        def generate(self, question: str, context: list[RetrievedChunk]) -> Generation:
+            return Generation(text="Não encontrei informação suficiente na documentação.")
 
     service.generator = RefusingGenerator()  # type: ignore[assignment]
     service.answer("Quais formas de pagamento são aceitas?")
     (answered,) = captured.events("query.answered")
     assert answered["status"] == "refused_by_model" and answered["sources"] == 0
+    assert answered["refusal_reason"] == "pattern"
+    (refused,) = captured.events("answer.refused")
+    assert refused["reason"] == "pattern" and refused["matched_pattern"]
 
 
 def test_question_and_answer_text_only_logged_at_debug(service: RAGService, captured: ListHandler) -> None:
@@ -300,13 +303,14 @@ def test_ollama_generate_event_reports_tokens_and_done_reason(
     from app.domain import Chunk
 
     context = [RetrievedChunk(Chunk("faq.pdf:p1:c1", "O prazo é de 10 dias.", "faq.pdf", {"page": 1}), 0.9)]
-    answer = OllamaGenerator("http://ollama:11434", "qwen3:1.7b").generate("Qual o prazo?", context)
-    assert answer.startswith("O prazo") and mock_ollama["generate"] == 1
+    generation = OllamaGenerator("http://ollama:11434", "qwen3:1.7b").generate("Qual o prazo?", context)
+    assert generation.text.startswith("O prazo") and mock_ollama["generate"] == 1
     (event,) = captured.events("provider.generate")
-    assert event["model"] == "qwen3:1.7b" and event["context_chunks"] == 1
+    assert event["model"] == "qwen3:1.7b" and event["context_chunks"] == 1 and event["prompt_version"]
     assert event["prompt_tokens"] == 200 and event["completion_tokens"] == 12 and event["done_reason"] == "stop"
     assert event["ollama_total_ms"] == 800.0 and event["ollama_prompt_eval_ms"] == 500.0
-    assert event["prompt_chars"] > 0 and event["answer_chars"] == len(answer)
+    assert event["prompt_chars"] > 0 and event["answer_chars"] == len(generation.text)
+    assert event["structured"] is False  # o mock devolve texto puro, não o JSON pedido
 
 
 # ---------------------------------------------------------------------------
@@ -324,7 +328,7 @@ def test_http_generates_request_id_and_returns_it_in_header_and_body(
     assert is_valid_request_id(rid) and len(rid) == 32
     body = response.json()
     assert body["request_id"] == rid
-    assert set(body["timings_ms"]) == {"retrieve", "filter", "generate"}
+    assert set(body["timings_ms"]) == {"retrieve", "filter", "generate", "verify"}
     # O mesmo id correlaciona todos os eventos da requisição.
     for name in ("query.retrieved", "query.answered", "http.request"):
         (event,) = captured.events(name)

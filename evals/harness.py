@@ -32,7 +32,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from app.domain import RAGRun
+from app.domain import AnswerStatus, RAGRun
 from app.rag import RAGService
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -143,7 +143,7 @@ def evaluate_case(service: RAGService, case: EvalCase) -> CaseResult:
             id=case.id,
             category=case.category,
             question=case.question,
-            status="error",
+            status=str(AnswerStatus.ERROR),
             confidence="",
             answer="",
             cited_sources=[],
@@ -164,8 +164,8 @@ def evaluate_case(service: RAGService, case: EvalCase) -> CaseResult:
         id=case.id,
         category=case.category,
         question=case.question,
-        status=answer.status,
-        confidence=answer.confidence,
+        status=str(answer.status),
+        confidence=str(answer.confidence),
         answer=answer.answer,
         cited_sources=cited,
         candidates=candidates,

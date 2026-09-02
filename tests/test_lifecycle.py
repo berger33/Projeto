@@ -18,7 +18,7 @@ from fastapi.testclient import TestClient
 from tests.conftest import ListHandler
 
 from app.config import ConfigError, Settings
-from app.domain import RetrievedChunk
+from app.domain import Generation, RetrievedChunk
 from app.embeddings import OllamaEmbeddingProvider
 from app.errors import (
     AuroraError,
@@ -430,7 +430,7 @@ class _FailingGenerator:
     def __init__(self, exc: Exception) -> None:
         self.exc = exc
 
-    def generate(self, question: str, context: list[RetrievedChunk]) -> str:
+    def generate(self, question: str, context: list[RetrievedChunk]) -> Generation:
         raise self.exc
 
 

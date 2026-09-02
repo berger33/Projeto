@@ -12,6 +12,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field, StringConstraints, field_validator
 
 from .config import Settings
+from .domain import AnswerStatus, Confidence
 from .errors import AuroraError, IndexNotReadyError
 from .observability import RequestContextMiddleware, configure_logging, get_request_id, log_event
 from .rag import RAGService
@@ -48,10 +49,13 @@ class SourceResponse(BaseModel):
 class AskResponse(BaseModel):
     answer: str
     sources: list[SourceResponse]
-    confidence: str
+    confidence: Confidence
     mode: str
     request_id: str | None = None
     timings_ms: dict[str, float] = Field(default_factory=dict)
+    # Aditivos (D10): estado da resposta e motivo da recusa, para clientes que queiram distinguir os casos.
+    status: AnswerStatus = AnswerStatus.ANSWERED
+    refusal_reason: str | None = None
 
 
 class ErrorResponse(BaseModel):
@@ -184,6 +188,8 @@ def create_app(service: RAGService | None = None, *, service_factory: ServiceFac
             mode=result.mode,
             request_id=result.request_id or get_request_id(),
             timings_ms=result.timings_ms,
+            status=result.status,
+            refusal_reason=result.refusal_reason,
         )
 
     @app.get("/", response_class=HTMLResponse)

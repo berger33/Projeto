@@ -1,7 +1,29 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import StrEnum
 from typing import Any
+
+# Texto canônico de recusa: único ponto de definição (Fase 2, G-15/R-13). Toda recusa devolvida pela API
+# usa exatamente este texto; o que o modelo escreveu fica apenas no log (DEBUG).
+REFUSAL_TEXT = "Não encontrei informação suficiente na documentação oficial da Aurora Moda Online."
+
+
+class AnswerStatus(StrEnum):
+    ANSWERED = "answered"
+    REFUSED_NO_CONTEXT = "refused_no_context"  # nenhum chunk passou nos filtros de retrieval
+    REFUSED_BY_MODEL = "refused_by_model"  # gerador recusou, declarou-se sem sustentação ou falhou na verificação
+    ERROR = "error"  # usado pela avaliação quando a execução lança exceção
+
+    @property
+    def refused(self) -> bool:
+        return self in (AnswerStatus.REFUSED_NO_CONTEXT, AnswerStatus.REFUSED_BY_MODEL)
+
+
+class Confidence(StrEnum):
+    ALTA = "alta"
+    MEDIA = "média"
+    BAIXA = "baixa"
 
 
 @dataclass(frozen=True)
@@ -26,15 +48,35 @@ class SourceRef:
 
 
 @dataclass(frozen=True)
+class Generation:
+    """Saída de um ``AnswerGenerator``.
+
+    ``refused``/``grounded``/``used_sources`` são sinais **declarados pelo gerador** (saída estruturada);
+    ``None``/vazio significa "não informado" e a decisão fica com a verificação independente em
+    ``app.refusal``. ``used_sources`` são índices 1-based das ``[FONTE n]`` do contexto.
+    """
+
+    text: str
+    refused: bool | None = None
+    grounded: bool | None = None
+    used_sources: tuple[int, ...] = ()
+    structured: bool = False
+    done_reason: str | None = None
+
+
+@dataclass(frozen=True)
 class RAGAnswer:
     answer: str
     sources: list[SourceRef]
-    confidence: str
+    confidence: Confidence
     mode: str
     request_id: str | None = None
     timings_ms: dict[str, float] = field(default_factory=dict)
-    # "answered" | "refused_no_context" | "refused_by_model" (vira Enum em P1-01)
-    status: str = "answered"
+    status: AnswerStatus = AnswerStatus.ANSWERED
+    # Diagnóstico da decisão (também vai para o log): por que recusou e a fração da resposta sustentada
+    # pelo contexto (``None`` quando não avaliada, ex.: recusa sem contexto ou resposta curta demais).
+    refusal_reason: str | None = None
+    support: float | None = None
 
 
 @dataclass(frozen=True)

@@ -7,12 +7,25 @@ from pathlib import Path
 
 from .config import Settings
 from .documents import load_chunks
-from .domain import RAGAnswer, RAGRun, Retrieval, RetrievedChunk, SourceRef
+from .domain import (
+    REFUSAL_TEXT,
+    AnswerStatus,
+    Confidence,
+    Generation,
+    RAGAnswer,
+    RAGRun,
+    Retrieval,
+    RetrievedChunk,
+    SourceRef,
+)
 from .embeddings import EmbeddingProvider, HashEmbeddingProvider, OllamaEmbeddingProvider
 from .errors import InvalidQuestionError, ProviderError, ping_ollama
 from .generation import AnswerGenerator, ExtractiveGenerator, OllamaGenerator
 from .observability import Timings, get_request_id, log_event, request_context
+from .refusal import judge
 from .retrieval import VectorIndex
+
+__all__ = ["REFUSAL_TEXT", "RAGService"]
 
 logger = logging.getLogger(__name__)
 
@@ -44,9 +57,6 @@ def _terms(text: str) -> set[str]:
         for token in re.findall(r"[a-zA-ZÀ-ÿ0-9]+", text)
         if len(token) > 2 and token.lower() not in STOPWORDS
     }
-
-
-REFUSAL_TEXT = "Não encontrei informação suficiente na documentação oficial da Aurora Moda Online."
 
 
 class RAGService:
@@ -167,41 +177,43 @@ class RAGService:
             retrieval = self._retrieve(question, timings)
             selected = retrieval.selected
             if not selected:
-                result = RAGAnswer(
-                    answer=REFUSAL_TEXT,
-                    sources=[],
-                    confidence="baixa",
-                    mode=self.generator.mode,
-                    request_id=request_id,
-                    timings_ms=timings.as_dict(),
-                    status="refused_no_context",
-                )
+                result = self._refusal(AnswerStatus.REFUSED_NO_CONTEXT, request_id, timings, reason="no_context")
                 self._log_answer(question, result, started=started)
                 return RAGRun(answer=result, retrieval=retrieval)
             with timings.stage("generate"):
-                answer = self.generator.generate(question, selected)
-            if answer.lower().startswith("não encontrei informação suficiente"):
-                result = RAGAnswer(
-                    answer=answer,
-                    sources=[],
-                    confidence="baixa",
-                    mode=self.generator.mode,
-                    request_id=request_id,
-                    timings_ms=timings.as_dict(),
-                    status="refused_by_model",
+                generation = self.generator.generate(question, selected)
+            with timings.stage("verify"):
+                verdict = judge(generation, selected)
+            if verdict.refused:
+                # Recusa sempre sai com o texto canônico e sem fontes; o que o modelo escreveu fica no log.
+                result = self._refusal(
+                    AnswerStatus.REFUSED_BY_MODEL, request_id, timings, reason=verdict.reason, support=verdict.support
                 )
-                self._log_answer(question, result, started=started)
+                self._log_answer(question, result, started=started, generation=generation)
+                log_event(
+                    logger,
+                    logging.INFO,
+                    "answer.refused",
+                    reason=verdict.reason,
+                    support=verdict.support,
+                    structured=generation.structured,
+                    declared_grounded=generation.grounded,
+                    matched_pattern=verdict.matched_pattern,
+                    unsupported_numbers=list(verdict.numbers),
+                    model_text_chars=len(generation.text),
+                )
                 return RAGRun(answer=result, retrieval=retrieval)
             result = RAGAnswer(
-                answer=answer,
+                answer=generation.text,
                 sources=self._sources(selected),
-                confidence="alta" if selected[0].score >= 0.45 else "média",
+                confidence=Confidence.ALTA if selected[0].score >= 0.45 else Confidence.MEDIA,
                 mode=self.generator.mode,
                 request_id=request_id,
                 timings_ms=timings.as_dict(),
-                status="answered",
+                status=AnswerStatus.ANSWERED,
+                support=verdict.support,
             )
-            self._log_answer(question, result, started=started)
+            self._log_answer(question, result, started=started, generation=generation)
             return RAGRun(answer=result, retrieval=retrieval)
         except Exception as exc:
             log_event(
@@ -216,6 +228,27 @@ class RAGService:
             )
             raise
 
+    def _refusal(
+        self,
+        status: AnswerStatus,
+        request_id: str | None,
+        timings: Timings,
+        *,
+        reason: str | None,
+        support: float | None = None,
+    ) -> RAGAnswer:
+        return RAGAnswer(
+            answer=REFUSAL_TEXT,
+            sources=[],
+            confidence=Confidence.BAIXA,
+            mode=self.generator.mode,
+            request_id=request_id,
+            timings_ms=timings.as_dict(),
+            status=status,
+            refusal_reason=reason,
+            support=support,
+        )
+
     @staticmethod
     def _sources(selected: list[RetrievedChunk]) -> list[SourceRef]:
         sources: list[SourceRef] = []
@@ -227,22 +260,33 @@ class RAGService:
                 sources.append(ref)
         return sources
 
-    def _log_answer(self, question: str, result: RAGAnswer, *, started: float) -> None:
+    def _log_answer(
+        self, question: str, result: RAGAnswer, *, started: float, generation: Generation | None = None
+    ) -> None:
         log_event(
             logger,
             logging.INFO,
             "query.answered",
-            status=result.status,
+            status=str(result.status),
             mode=result.mode,
-            confidence=result.confidence,
+            confidence=str(result.confidence),
             sources=len(result.sources),
             answer_chars=len(result.answer),
+            refusal_reason=result.refusal_reason,
+            support=result.support,
             timings_ms=result.timings_ms,
             total_ms=round((time.perf_counter() - started) * 1000.0, 2),
         )
         # Texto integral só em DEBUG: perguntas podem conter dados pessoais.
         if logger.isEnabledFor(logging.DEBUG):
-            log_event(logger, logging.DEBUG, "query.text", question=question, answer=result.answer)
+            log_event(
+                logger,
+                logging.DEBUG,
+                "query.text",
+                question=question,
+                answer=result.answer,
+                model_text=generation.text if generation is not None else None,
+            )
 
 
 def _model_available(model: str, available: list[str]) -> bool:

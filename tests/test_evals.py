@@ -23,8 +23,8 @@ import pytest
 
 from app.config import Settings
 from app.documents import load_chunks
-from app.domain import Chunk, RAGAnswer, RAGRun, Retrieval, RetrievedChunk, SourceRef
-from app.rag import REFUSAL_TEXT, RAGService
+from app.domain import REFUSAL_TEXT, Chunk, RAGAnswer, RAGRun, Retrieval, RetrievedChunk, SourceRef
+from app.rag import RAGService
 from evals import run as eval_cli
 from evals.harness import (
     CATEGORIES,
