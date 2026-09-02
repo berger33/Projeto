@@ -205,3 +205,24 @@ Marque as que quiser alterar; as demais seguem a proposta.
 ---
 
 **Fim da Fase 3.** Nada foi implementado. Aguardo sua aprovação explícita ("aprovado, pode implementar") e, se quiser, ajustes na ordem ou nas decisões D1–D10.
+
+---
+
+## 7. Decisões finais (registradas após a aprovação)
+
+**Aprovação:** "Aprovado, pode implementar" — 2026-09-02. Commits vão para a branch `arena/01a06272-aurora-document-rag` no GitHub, um item por commit.
+
+**Hardware informado para o Ollama:** Intel Core i5-1135G7 (4 núcleos / 8 threads, AVX-512), 16 GB RAM, Intel Iris Xe (sem GPU dedicada). Implicações: o Ollama roda **100 % em CPU** (a Iris Xe não é usada pelas builds estáveis); 16 GB comportam embedding (~1 GB) + LLM (~1,4–2,5 GB) com folga; o gargalo é o *prefill* do prompt no LLM (~100–200 tokens/s num 1.7B nesta CPU), o que torna o **orçamento de contexto (P1-05)** e a **persistência de embeddings (P2-03)** ainda mais importantes.
+
+| ID | Decisão final | Observação |
+|---|---|---|
+| D1 | `nomic-embed-text-v2-moe` (default), com prefixos `search_query:` / `search_document:` | ~1 GB, multilíngue, MoE (~305 M ativos) → rápido em CPU. Alternativa mais leve documentada: `embeddinggemma` (622 MB, prefixos próprios). `bge-m3` fica como opção se houver GPU no futuro. |
+| D2 | `qwen3:1.7b` (default), `think: false`, `num_ctx` 4096, orçamento de prompt ≈ 1.200 tokens, `num_predict` ≈ 300 | `qwen3:4b` seria ~2× mais lento no prefill nesta CPU; `qwen3:0.6b` é rápido mas fraco para recusa fundamentada em PT-BR. Meta de latência ponta a ponta será fixada após a baseline medida (§4.3). |
+| D3 | Interface `Reranker` + MMR agora; reranker real só se o eval mostrar ≥ 5 p.p. de MRR | Em CPU, um cross-encoder custaria 0,3–0,8 s/consulta. |
+| D4 | Persistência local (`.npy` + `manifest.json`) com interface `VectorStore` plugável | Conforme §1. |
+| D5 | API tratada como **não pública** por ora | Rate limit/token permanecem na Onda 3 (P3-03). |
+| D6 | Python mínimo **3.11**; CI em 3.11/3.12/3.13 | |
+| D7 | `demo/index.html` será **removida** (P3-04) | A UI real em `/` cumpre o papel. |
+| D8 | Manter `faq.csv` e `faq.pdf` com dedup near-dup (P2-02) | |
+| D9 | `docs/` → `corpus/` (P3-05) | |
+| D10 | Contrato de `/api/ask` estendido de forma **aditiva** | Campos atuais preservados. |
