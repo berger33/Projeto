@@ -7,6 +7,7 @@ e G-10 (validação de entrada duplicada/incompleta).
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import threading
 from pathlib import Path
@@ -101,7 +102,8 @@ def test_settings_requires_model_names_in_ollama_mode() -> None:
 
 def test_settings_defaults_and_env_parsing() -> None:
     settings = Settings.from_env({})
-    assert settings == Settings()
+    assert settings.index_dir == ".rag_index"  # dict vazio: sem RAG_INDEX_DIR → padrão
+    assert dataclasses.replace(settings, index_dir=Settings().index_dir) == Settings()
     assert settings.retrieval_k == 5 and settings.min_score is None and settings.thresholds.min_score == 0.12
     assert settings.embed_timeout_s == 30.0 and settings.generate_timeout_s == 60.0
     assert all(origin == "default" for origin in settings.source.values())

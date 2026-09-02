@@ -326,8 +326,10 @@ def _assert_thresholds(metrics: dict[str, Any], thresholds: dict[str, Any]) -> N
 
 
 @pytest.fixture(scope="module")
-def local_report():
-    service = RAGService(DOCS, Settings.from_env() if os.getenv("RAG_MODE") == "local" else Settings(rag_mode="local"))
+def local_report(tmp_path_factory: pytest.TempPathFactory):
+    # Fixture de módulo: roda antes da autouse (function-scoped) que isola RAG_INDEX_DIR → índice explícito.
+    settings = Settings.from_env() if os.getenv("RAG_MODE") == "local" else Settings(rag_mode="local")
+    service = RAGService(DOCS, settings, index_dir=tmp_path_factory.mktemp("eval_index"))
     return run_eval(service)
 
 

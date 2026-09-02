@@ -5,7 +5,6 @@ import time
 from pathlib import Path
 
 from .config import Settings
-from .documents import load_corpus
 from .domain import (
     REFUSAL_TEXT,
     AnswerStatus,
@@ -20,8 +19,8 @@ from .embeddings import EmbeddingProvider, HashEmbeddingProvider, OllamaEmbeddin
 from .errors import InvalidQuestionError, ProviderError, ping_ollama
 from .generation import AnswerGenerator, ExtractiveGenerator, OllamaGenerator, PromptBudget
 from .observability import Timings, get_request_id, log_event, request_context
+from .persistence import IndexBuilder
 from .refusal import judge
-from .retrieval import VectorIndex
 from .retriever import HybridRetriever, RetrieverConfig
 from .sources import derive_sources, strip_citations
 
@@ -31,13 +30,15 @@ logger = logging.getLogger(__name__)
 
 
 class RAGService:
-    def __init__(self, docs_dir: str | Path, settings: Settings):
+    def __init__(self, docs_dir: str | Path, settings: Settings, *, index_dir: str | Path | None = None):
+        """``index_dir``: diretório do índice persistido; ``None`` usa ``settings.index_dir`` (relativo ao
+        diretório de trabalho); string vazia desabilita a persistência."""
         self.settings = settings
         self.docs_dir = Path(docs_dir)
+        resolved_index_dir = settings.index_dir if index_dir is None else str(index_dir)
+        self.index_dir: Path | None = Path(resolved_index_dir) if resolved_index_dir else None
         started = time.perf_counter()
         try:
-            chunks, ingest = load_corpus(docs_dir)
-            self.ingest_report = ingest
             embeddings: EmbeddingProvider
             generator: AnswerGenerator
             if settings.rag_mode == "ollama":
@@ -57,7 +58,11 @@ class RAGService:
                 embeddings = HashEmbeddingProvider()
                 generator = ExtractiveGenerator()
             self.generator = generator
-            self.index = VectorIndex(chunks, embeddings)
+            build = IndexBuilder(self.docs_dir, settings, embeddings, index_dir=self.index_dir).load_or_build()
+            chunks, ingest = build.chunks, build.report
+            self.ingest_report = ingest
+            self.manifest = build.manifest
+            self.index = build.index
             thresholds = settings.thresholds
             self.thresholds = thresholds
             self.retriever = HybridRetriever(
@@ -93,6 +98,9 @@ class RAGService:
             duplicates_removed=len(ingest.duplicates),
             skipped_files=ingest.skipped or None,
             dimension=self.index.dimension,
+            loaded_from_disk=build.loaded_from_disk,
+            rebuild_reason=build.reason,
+            index_dir=str(self.index_dir) if self.index_dir else None,
             query_prefix=embeddings.prefixes.query if isinstance(embeddings, OllamaEmbeddingProvider) else None,
             embedding_model=settings.embedding_model if settings.rag_mode == "ollama" else "hash-local",
             generation_model=settings.generation_model if settings.rag_mode == "ollama" else "extractive-local",
@@ -102,6 +110,32 @@ class RAGService:
     @property
     def chunk_count(self) -> int:
         return len(self.index.chunks)
+
+    def reload(self) -> dict[str, object]:
+        """Reindexa a partir do corpus atual (força reconstrução) e troca o índice em uso atomicamente.
+
+        Usado pelo comando ``python -m app.ingest`` e pelo endpoint administrativo opcional.
+        """
+        started = time.perf_counter()
+        build = IndexBuilder(
+            self.docs_dir, self.settings, self.index.embeddings, index_dir=self.index_dir
+        ).load_or_build(force=True)
+        retriever = HybridRetriever(build.chunks, build.index, self.retriever.config)
+        self.index, self.retriever, self.ingest_report, self.manifest = (
+            build.index,
+            retriever,
+            build.report,
+            build.manifest,
+        )
+        summary: dict[str, object] = {
+            "chunks": len(build.chunks),
+            "documents": len(build.report.files),
+            "duplicates_removed": len(build.report.duplicates),
+            "dimension": build.index.dimension,
+            "duration_ms": round((time.perf_counter() - started) * 1000.0, 2),
+        }
+        log_event(logger, logging.INFO, "index.reloaded", summary=summary)
+        return summary
 
     def readiness(self) -> dict[str, object]:
         """Estado das dependências para ``/ready``: índice com chunks e, em modo Ollama, servidor

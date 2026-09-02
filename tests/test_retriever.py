@@ -171,7 +171,7 @@ def test_retrieved_event_exposes_fusion_diagnostics(captured) -> None:
 
 
 def test_vector_only_threshold_is_configurable_and_validated() -> None:
-    settings = Settings.from_env({"RAG_VECTOR_ONLY_MIN_SCORE": "0.7"})
+    settings = Settings.from_env({"RAG_VECTOR_ONLY_MIN_SCORE": "0.7", "RAG_INDEX_DIR": ""})
     assert settings.vector_only_min_score == 0.7
     with pytest.raises(ConfigError, match="RAG_VECTOR_ONLY_MIN_SCORE"):
         Settings(vector_only_min_score=1.5)

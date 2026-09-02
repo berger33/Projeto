@@ -90,6 +90,9 @@ class Settings:
     # Janela de contexto e limite de geração enviados ao Ollama (options.num_ctx / num_predict).
     num_ctx: int = 4096
     num_predict: int = 300
+    # Diretório do índice persistido (.npy + manifest). "" desabilita a persistência (reembeda a cada boot).
+    # O default lê RAG_INDEX_DIR mesmo em construção direta, para que testes/CLIs isolem o índice.
+    index_dir: str = field(default_factory=lambda: _read_index_dir(os.environ))
     # Só informativo (não valida): de onde cada valor veio, para o log ``settings.loaded``.
     source: dict[str, str] = field(default_factory=dict, compare=False, repr=False)
 
@@ -182,6 +185,7 @@ class Settings:
             embed_batch_size=_parse_int("OLLAMA_EMBED_BATCH_SIZE", read("OLLAMA_EMBED_BATCH_SIZE", "32")),
             num_ctx=_parse_int("OLLAMA_NUM_CTX", read("OLLAMA_NUM_CTX", "4096")),
             num_predict=_parse_int("OLLAMA_NUM_PREDICT", read("OLLAMA_NUM_PREDICT", "300")),
+            index_dir=_read_index_dir(env),
             source=source,
         )
 
@@ -220,6 +224,7 @@ class Settings:
             "embed_batch_size": self.embed_batch_size,
             "num_ctx": self.num_ctx,
             "num_predict": self.num_predict,
+            "index_dir": self.index_dir or None,
         }
 
 
@@ -237,6 +242,12 @@ def _split_host_port(base_url: str) -> tuple[str, int | None] | None:
 
 def _is_number(value: object) -> bool:
     return isinstance(value, int | float) and not isinstance(value, bool) and value == value  # exclui NaN
+
+
+def _read_index_dir(env: Mapping[str, str]) -> str:
+    """``RAG_INDEX_DIR`` ausente → padrão; definido como vazio → persistência desligada."""
+    raw = env.get("RAG_INDEX_DIR")
+    return ".rag_index" if raw is None else raw.strip()
 
 
 def _parse_optional_float(name: str, env: Mapping[str, str]) -> float | None:
