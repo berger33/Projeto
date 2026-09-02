@@ -70,7 +70,10 @@ class RAGService:
             generator: AnswerGenerator
             if settings.rag_mode == "ollama":
                 embeddings = OllamaEmbeddingProvider(
-                    settings.ollama_base_url, settings.embedding_model, timeout=settings.embed_timeout_s
+                    settings.ollama_base_url,
+                    settings.embedding_model,
+                    timeout=settings.embed_timeout_s,
+                    batch_size=settings.embed_batch_size,
                 )
                 generator = OllamaGenerator(
                     settings.ollama_base_url, settings.generation_model, timeout=settings.generate_timeout_s
@@ -99,7 +102,8 @@ class RAGService:
             mode=self.generator.mode,
             documents=len({chunk.source for chunk in chunks}),
             chunks=len(chunks),
-            dimension=len(self.index.vectors[0]) if self.index.vectors else 0,
+            dimension=self.index.dimension,
+            query_prefix=embeddings.prefixes.query if isinstance(embeddings, OllamaEmbeddingProvider) else None,
             embedding_model=settings.embedding_model if settings.rag_mode == "ollama" else "hash-local",
             generation_model=settings.generation_model if settings.rag_mode == "ollama" else "extractive-local",
             duration_ms=round((time.perf_counter() - started) * 1000.0, 2),

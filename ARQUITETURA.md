@@ -9,7 +9,7 @@ Responder perguntas usando exclusivamente a documentação da Aurora, com separa
 | Componente | Responsabilidade |
 |---|---|
 | `app/documents.py` | lê PDF/CSV e produz chunks rastreáveis |
-| `app/embeddings.py` | converte textos em vetores; provider local ou Ollama |
+| `app/embeddings.py` | converte textos em vetores; provider local ou Ollama (prefixos de tarefa por família de modelo, lotes, retry, validação de dimensão) |
 | `app/retrieval.py` | indexa vetores e calcula similaridade cosseno |
 | `app/generation.py` | monta prompt e produz resposta; extrativo local ou LLM Ollama |
 | `app/rag.py` | aplica top-k, limiar, relevância, geração, verificação e fontes |

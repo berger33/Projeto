@@ -18,6 +18,7 @@ RAG_MODES = ("local", "ollama")
 TOP_K_RANGE = (1, 50)
 MIN_SCORE_RANGE = (0.0, 1.0)
 TIMEOUT_RANGE = (1.0, 600.0)
+BATCH_SIZE_RANGE = (1, 256)
 
 
 class ConfigError(ValueError):
@@ -28,12 +29,13 @@ class ConfigError(ValueError):
 class Settings:
     rag_mode: str = "local"
     ollama_base_url: str = "http://127.0.0.1:11434"
-    embedding_model: str = "nomic-embed-text"
+    embedding_model: str = "nomic-embed-text-v2-moe"
     generation_model: str = "qwen3:0.6b"
     retrieval_k: int = 5
     min_score: float = 0.12
     embed_timeout_s: float = 30.0
     generate_timeout_s: float = 60.0
+    embed_batch_size: int = 32
     # Só informativo (não valida): de onde cada valor veio, para o log ``settings.loaded``.
     source: dict[str, str] = field(default_factory=dict, compare=False, repr=False)
 
@@ -53,6 +55,14 @@ class Settings:
         ):
             if not _is_number(value) or not TIMEOUT_RANGE[0] <= value <= TIMEOUT_RANGE[1]:
                 errors.append(f"{env_name}={value!r}: faixa aceita {TIMEOUT_RANGE[0]:g}..{TIMEOUT_RANGE[1]:g} segundos")
+        if (
+            not isinstance(self.embed_batch_size, int)
+            or isinstance(self.embed_batch_size, bool)
+            or not BATCH_SIZE_RANGE[0] <= self.embed_batch_size <= BATCH_SIZE_RANGE[1]
+        ):
+            errors.append(
+                f"OLLAMA_EMBED_BATCH_SIZE={self.embed_batch_size!r}: faixa aceita {BATCH_SIZE_RANGE[0]}..{BATCH_SIZE_RANGE[1]}"
+            )
         if self.rag_mode == "ollama":
             if _split_host_port(self.ollama_base_url) is None:
                 errors.append(f"OLLAMA_BASE_URL={self.ollama_base_url!r}: informe uma URL http(s) completa")
@@ -80,12 +90,13 @@ class Settings:
         return cls(
             rag_mode=mode,
             ollama_base_url=read("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/"),
-            embedding_model=read("OLLAMA_EMBED_MODEL", "nomic-embed-text"),
+            embedding_model=read("OLLAMA_EMBED_MODEL", "nomic-embed-text-v2-moe"),
             generation_model=read("OLLAMA_CHAT_MODEL", "qwen3:0.6b"),
             retrieval_k=_parse_int("RAG_TOP_K", read("RAG_TOP_K", "5")),
             min_score=_parse_float("RAG_MIN_SCORE", read("RAG_MIN_SCORE", "0.12")),
             embed_timeout_s=_parse_float("OLLAMA_EMBED_TIMEOUT_S", read("OLLAMA_EMBED_TIMEOUT_S", "30")),
             generate_timeout_s=_parse_float("OLLAMA_GENERATE_TIMEOUT_S", read("OLLAMA_GENERATE_TIMEOUT_S", "60")),
+            embed_batch_size=_parse_int("OLLAMA_EMBED_BATCH_SIZE", read("OLLAMA_EMBED_BATCH_SIZE", "32")),
             source=source,
         )
 
@@ -102,6 +113,7 @@ class Settings:
             "min_score": self.min_score,
             "embed_timeout_s": self.embed_timeout_s,
             "generate_timeout_s": self.generate_timeout_s,
+            "embed_batch_size": self.embed_batch_size,
         }
 
 

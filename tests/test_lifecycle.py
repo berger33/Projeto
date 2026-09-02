@@ -200,7 +200,7 @@ def test_ollama_providers_raise_typed_errors(monkeypatch: pytest.MonkeyPatch) ->
 
     _mock_client(monkeypatch, handler)
     with pytest.raises(ProviderResponseError, match="1 embedding"):
-        OllamaEmbeddingProvider(INTERNAL_URL, "nomic-embed-text").embed(["a", "b"])
+        OllamaEmbeddingProvider(INTERNAL_URL, "nomic-embed-text").embed_documents(["a", "b"])
     with pytest.raises(ProviderResponseError, match="não devolveu texto"):
         OllamaGenerator(INTERNAL_URL, "qwen3").generate("q", [])
     with pytest.raises(ProviderResponseError):

@@ -288,10 +288,11 @@ def mock_ollama(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, int]]:
 
 
 def test_ollama_embed_event_reports_server_metrics(mock_ollama: dict[str, int], captured: ListHandler) -> None:
-    vectors = OllamaEmbeddingProvider("http://ollama:11434", "nomic-embed-text").embed(["a", "bb"])
+    vectors = OllamaEmbeddingProvider("http://ollama:11434", "nomic-embed-text").embed_documents(["a", "bb"])
     assert len(vectors) == 2 and mock_ollama["embed"] == 1
     (event,) = captured.events("provider.embed")
-    assert event["model"] == "nomic-embed-text" and event["texts"] == 2 and event["chars"] == 3
+    # chars conta o texto enviado, já com o prefixo "search_document: " (17 chars) em cada item.
+    assert event["model"] == "nomic-embed-text" and event["texts"] == 2 and event["chars"] == 3 + 2 * 17
     assert event["dimension"] == 3 and event["prompt_tokens"] == 12
     assert event["ollama_total_ms"] == 5.0 and event["ollama_load_ms"] == 1.0
     assert event["duration_ms"] >= 0

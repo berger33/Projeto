@@ -29,7 +29,7 @@ Document loader + chunking
    ↓
 Embedding provider
    ├─ local hash embedding (CI/offline)
-   └─ Ollama / nomic-embed-text
+   └─ Ollama / nomic-embed-text-v2-moe
    ↓
 Vector index + cosine similarity
    ↓
@@ -66,7 +66,7 @@ Abra `http://127.0.0.1:8000` ou `/docs`.
 ### RAG generativo com Ollama
 
 ```bash
-ollama pull nomic-embed-text
+ollama pull nomic-embed-text-v2-moe
 ollama pull qwen3:0.6b
 ```
 
@@ -75,11 +75,18 @@ Configure:
 ```env
 RAG_MODE=ollama
 OLLAMA_BASE_URL=http://127.0.0.1:11434
-OLLAMA_EMBED_MODEL=nomic-embed-text
+OLLAMA_EMBED_MODEL=nomic-embed-text-v2-moe
 OLLAMA_CHAT_MODEL=qwen3:0.6b
 OLLAMA_EMBED_TIMEOUT_S=30        # opcional (1..600)
 OLLAMA_GENERATE_TIMEOUT_S=60     # opcional (1..600); em CPU, modelos maiores podem precisar de mais
+OLLAMA_EMBED_BATCH_SIZE=32       # opcional (1..256): textos por requisição na indexação
 ```
+
+#### Modelo de embedding
+
+O padrão é `nomic-embed-text-v2-moe` (multilíngue, ~1 GB, rápido em CPU). O `nomic-embed-text` original é treinado para inglês e não deve ser usado com corpus em português. Os **prefixos de tarefa** exigidos por cada família são aplicados automaticamente a partir do nome do modelo (`search_query:`/`search_document:` para nomic; `task: search result | query:`/`title: none | text:` para `embeddinggemma`; instrução de consulta para `qwen3-embedding` e `mxbai-embed-large`; nenhum para `bge-m3`). Para trocar de modelo basta alterar `OLLAMA_EMBED_MODEL` e reiniciar — o índice é reconstruído no boot e a dimensão dos vetores é validada; modelos fora da tabela funcionam sem prefixo.
+
+A indexação envia os chunks em lotes (`OLLAMA_EMBED_BATCH_SIZE`) com até 2 novas tentativas e backoff em falhas transitórias (timeout, conexão, HTTP 5xx/429); erro definitivo (modelo não instalado, 404) falha imediatamente com mensagem clara.
 
 `GET /ready` confirma se o servidor e os dois modelos estão disponíveis antes de enviar perguntas.
 

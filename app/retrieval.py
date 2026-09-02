@@ -23,15 +23,26 @@ class VectorIndex:
             raise ValueError("O índice precisa de pelo menos um chunk.")
         self.chunks = chunks
         self.embeddings = embeddings
-        self.vectors = embeddings.embed([chunk.text for chunk in chunks])
+        self.vectors = embeddings.embed_documents([chunk.text for chunk in chunks])
         if len(self.vectors) != len(chunks):
             raise RuntimeError("Quantidade de embeddings diferente da quantidade de chunks.")
+        dimensions = {len(vector) for vector in self.vectors}
+        if len(dimensions) != 1 or 0 in dimensions:
+            raise RuntimeError(
+                f"Embeddings com dimensões inconsistentes no índice: {sorted(dimensions)}. "
+                "Verifique se o modelo de embedding foi trocado sem reindexar."
+            )
+        self.dimension = dimensions.pop()
 
     def search(self, query: str, *, k: int = 5) -> list[RetrievedChunk]:
         query = query.strip()
         if not query:
             return []
-        query_vector = self.embeddings.embed([query])[0]
+        query_vector = self.embeddings.embed_query(query)
+        if len(query_vector) != self.dimension:
+            raise RuntimeError(
+                f"Embedding da consulta tem dimensão {len(query_vector)}; o índice foi construído com {self.dimension}."
+            )
         ranked = [
             RetrievedChunk(chunk=chunk, score=float(cosine_similarity(query_vector, vector)))
             for chunk, vector in zip(self.chunks, self.vectors, strict=True)
