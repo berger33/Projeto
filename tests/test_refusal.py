@@ -200,9 +200,10 @@ def test_parse_structured_answer_reads_schema_fields_and_tolerates_wrappers() ->
 
 def test_build_prompt_requests_json_and_refusal_text() -> None:
     prompt = build_prompt("Qual o prazo?", [_chunk("faq.csv:r7", "O prazo é de 10 dias.")])
-    assert REFUSAL_TEXT in prompt
-    assert '"grounded"' in prompt and '"used_sources"' in prompt
-    assert "[FONTE 1] faq.csv (row=2)" in prompt
+    assert REFUSAL_TEXT in prompt.system
+    assert '"grounded"' in prompt.system and '"used_sources"' in prompt.system
+    assert '<fonte n="1" documento="faq.csv" row=2>' in prompt.user
+    assert "<pergunta>\nQual o prazo?\n</pergunta>" in prompt.user
     assert PROMPT_VERSION
     assert set(ANSWER_SCHEMA["required"]) == {"answer", "grounded", "used_sources"}
 
@@ -210,7 +211,10 @@ def test_build_prompt_requests_json_and_refusal_text() -> None:
 def _patch_ollama(monkeypatch: pytest.MonkeyPatch, response_text: str, seen: dict) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         seen["body"] = json.loads(request.content)
-        return httpx.Response(200, json={"response": response_text, "done": True, "done_reason": "stop"})
+        seen["path"] = request.url.path
+        return httpx.Response(
+            200, json={"message": {"role": "assistant", "content": response_text}, "done": True, "done_reason": "stop"}
+        )
 
     real_client = httpx.Client
     monkeypatch.setattr(httpx, "Client", lambda **kwargs: real_client(transport=httpx.MockTransport(handler), **kwargs))

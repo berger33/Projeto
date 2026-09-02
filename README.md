@@ -67,7 +67,7 @@ Abra `http://127.0.0.1:8000` ou `/docs`.
 
 ```bash
 ollama pull nomic-embed-text-v2-moe
-ollama pull qwen3:0.6b
+ollama pull qwen3:1.7b
 ```
 
 Configure:
@@ -76,11 +76,17 @@ Configure:
 RAG_MODE=ollama
 OLLAMA_BASE_URL=http://127.0.0.1:11434
 OLLAMA_EMBED_MODEL=nomic-embed-text-v2-moe
-OLLAMA_CHAT_MODEL=qwen3:0.6b
+OLLAMA_CHAT_MODEL=qwen3:1.7b
 OLLAMA_EMBED_TIMEOUT_S=30        # opcional (1..600)
 OLLAMA_GENERATE_TIMEOUT_S=60     # opcional (1..600); em CPU, modelos maiores podem precisar de mais
 OLLAMA_EMBED_BATCH_SIZE=32       # opcional (1..256): textos por requisição na indexação
+OLLAMA_NUM_CTX=4096              # opcional: janela de contexto enviada ao modelo
+OLLAMA_NUM_PREDICT=300           # opcional: máximo de tokens gerados por resposta
 ```
+
+#### Geração
+
+A geração usa `/api/chat` com papel `system` separado, `think: false` (qwen3 não gasta tokens "pensando" e nada de `<think>` vaza para a resposta), saída JSON forçada por `format` e `options.num_ctx`/`num_predict` explícitos. O prompt tem **orçamento**: `num_ctx − num_predict − margem` tokens (estimados a 3,5 caracteres/token); os trechos entram inteiros, do mais relevante ao menos relevante, até o limite — o que não couber é registrado no evento `prompt.truncated` em vez de ser cortado silenciosamente pelo servidor. Trechos e pergunta são envolvidos em tags (`<contexto>`, `<fonte n="…">`, `<pergunta>`) cujo `<` é escapado dentro de conteúdo não confiável, para que um documento ou uma pergunta não consigam fechar ou abrir blocos do template. Resposta cortada por `num_predict` (`done_reason: length`) sem JSON completo é tratada como recusa. O padrão `qwen3:1.7b` é o menor modelo que responde com recusa fundamentada em PT-BR em CPU (i5 de 11ª geração, 16 GB); `qwen3:4b` melhora a qualidade a ~2× o tempo de prefill.
 
 #### Modelo de embedding
 

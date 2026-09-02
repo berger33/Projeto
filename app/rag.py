@@ -19,7 +19,7 @@ from .domain import (
 )
 from .embeddings import EmbeddingProvider, HashEmbeddingProvider, OllamaEmbeddingProvider
 from .errors import InvalidQuestionError, ProviderError, ping_ollama
-from .generation import AnswerGenerator, ExtractiveGenerator, OllamaGenerator
+from .generation import AnswerGenerator, ExtractiveGenerator, OllamaGenerator, PromptBudget
 from .observability import Timings, get_request_id, log_event, request_context
 from .refusal import judge
 from .retrieval import VectorIndex
@@ -47,7 +47,10 @@ class RAGService:
                     batch_size=settings.embed_batch_size,
                 )
                 generator = OllamaGenerator(
-                    settings.ollama_base_url, settings.generation_model, timeout=settings.generate_timeout_s
+                    settings.ollama_base_url,
+                    settings.generation_model,
+                    timeout=settings.generate_timeout_s,
+                    budget=PromptBudget(num_ctx=settings.num_ctx, num_predict=settings.num_predict),
                 )
             else:
                 embeddings = HashEmbeddingProvider()

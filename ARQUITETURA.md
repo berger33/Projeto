@@ -14,7 +14,7 @@ Responder perguntas usando exclusivamente a documentação da Aurora, com separa
 | `app/retrieval.py` | indexa vetores e calcula similaridade cosseno |
 | `app/lexical.py` | BM25 próprio sobre texto normalizado (sem acentos, stopwords PT-BR, stemmer leve) |
 | `app/retriever.py` | retrieval híbrido: pool de 4·k por canal, fusão RRF, filtro com três níveis de evidência (cobertura lexical ponderada por IDF, cosseno + radical âncora, cosseno alto), corte em k |
-| `app/generation.py` | monta prompt e produz resposta; extrativo local ou LLM Ollama |
+| `app/generation.py` | monta prompt com orçamento de tokens e delimitadores escapados; extrativo local ou LLM Ollama via `/api/chat` (`system` separado, `think: false`, `format` JSON, `num_ctx`/`num_predict`, `done_reason` verificado) |
 | `app/rag.py` | aplica top-k, limiar, relevância, geração, verificação e fontes |
 | `app/refusal.py` | decide se a saída do gerador é resposta ou recusa: declaração estruturada + classificador léxico + sustentação pelo contexto |
 | `app/text.py` | normalização PT-BR (sem acentos, minúsculas), tokenização e stopwords compartilhadas |
@@ -56,7 +56,7 @@ CI não deve depender de servidor Ollama nem de API paga. Por isso existe um pro
 
 1. Pergunta vazia é rejeitada.
 2. Retrieval é híbrido (vetorial + BM25 fundidos por RRF) e filtra o pool fundido — não um top-k já cortado — exigindo evidência de relevância em três níveis: cobertura lexical ponderada por IDF, ou cosseno médio com um radical em comum, ou cosseno alto. `devolucao`/`devolução`/`devoluções` são o mesmo termo.
-3. O prompt instrui o modelo a tratar documentos apenas como dados e não seguir instruções contidas neles.
+3. O prompt instrui o modelo a tratar documentos apenas como dados e não seguir instruções contidas neles; além da instrução, trechos e pergunta ficam em blocos com delimitadores escapados (um chunk não consegue fechar `</contexto>` nem abrir `<pergunta>`), e o prompt tem orçamento explícito de tokens — o que não cabe é descartado por chunk inteiro e logado, nunca truncado pelo servidor.
 4. Sem contexto suficiente, a resposta é de recusa. A recusa do modelo é reconhecida por declaração estruturada (`grounded: false`), por padrões de múltiplas formulações em PT-BR e por verificação de sustentação (tokens de conteúdo e quantidades da resposta precisam existir no contexto) — nunca por comparação com uma frase exata.
 5. Fontes são derivadas dos chunks realmente selecionados e só são emitidas quando `status == answered`.
 6. Falha do provider gera `503` com `error_code` estável em vez de sucesso inventado; a mensagem interna (URL, erro de rede) vai só para o log, correlacionada pelo `request_id`.

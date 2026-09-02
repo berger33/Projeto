@@ -96,7 +96,7 @@ def test_settings_requires_model_names_in_ollama_mode() -> None:
     with pytest.raises(ConfigError, match="OLLAMA_EMBED_MODEL"):
         Settings(rag_mode="ollama", embedding_model="")
     # Variável em branco no ambiente conta como ausente e cai no default.
-    assert Settings.from_env({"RAG_MODE": "ollama", "OLLAMA_CHAT_MODEL": "   "}).generation_model == "qwen3:0.6b"
+    assert Settings.from_env({"RAG_MODE": "ollama", "OLLAMA_CHAT_MODEL": "   "}).generation_model == "qwen3:1.7b"
 
 
 def test_settings_defaults_and_env_parsing() -> None:
@@ -194,8 +194,8 @@ def test_ollama_providers_raise_typed_errors(monkeypatch: pytest.MonkeyPatch) ->
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/api/embed":
             return httpx.Response(200, json={"embeddings": [[0.1, 0.2]]})  # 1 vetor para 2 textos
-        if request.url.path == "/api/generate":
-            return httpx.Response(200, json={"response": "", "done_reason": "length"})
+        if request.url.path == "/api/chat":
+            return httpx.Response(200, json={"message": {"role": "assistant", "content": ""}, "done_reason": "stop"})
         return httpx.Response(200, text="not json")
 
     _mock_client(monkeypatch, handler)

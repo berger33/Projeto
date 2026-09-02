@@ -19,6 +19,8 @@ TOP_K_RANGE = (1, 50)
 MIN_SCORE_RANGE = (0.0, 1.0)
 TIMEOUT_RANGE = (1.0, 600.0)
 BATCH_SIZE_RANGE = (1, 256)
+NUM_CTX_RANGE = (1024, 131072)
+NUM_PREDICT_RANGE = (32, 4096)
 
 
 class ConfigError(ValueError):
@@ -30,7 +32,7 @@ class Settings:
     rag_mode: str = "local"
     ollama_base_url: str = "http://127.0.0.1:11434"
     embedding_model: str = "nomic-embed-text-v2-moe"
-    generation_model: str = "qwen3:0.6b"
+    generation_model: str = "qwen3:1.7b"
     retrieval_k: int = 5
     min_score: float = 0.12
     # Cosseno a partir do qual um chunk é aceito mesmo sem sobreposição lexical com a pergunta.
@@ -38,6 +40,9 @@ class Settings:
     embed_timeout_s: float = 30.0
     generate_timeout_s: float = 60.0
     embed_batch_size: int = 32
+    # Janela de contexto e limite de geração enviados ao Ollama (options.num_ctx / num_predict).
+    num_ctx: int = 4096
+    num_predict: int = 300
     # Só informativo (não valida): de onde cada valor veio, para o log ``settings.loaded``.
     source: dict[str, str] = field(default_factory=dict, compare=False, repr=False)
 
@@ -73,6 +78,20 @@ class Settings:
             errors.append(
                 f"OLLAMA_EMBED_BATCH_SIZE={self.embed_batch_size!r}: faixa aceita {BATCH_SIZE_RANGE[0]}..{BATCH_SIZE_RANGE[1]}"
             )
+        for env_name, value, bounds in (
+            ("OLLAMA_NUM_CTX", self.num_ctx, NUM_CTX_RANGE),
+            ("OLLAMA_NUM_PREDICT", self.num_predict, NUM_PREDICT_RANGE),
+        ):
+            if not isinstance(value, int) or isinstance(value, bool) or not bounds[0] <= value <= bounds[1]:
+                errors.append(f"{env_name}={value!r}: faixa aceita {bounds[0]}..{bounds[1]}")
+        if (
+            isinstance(self.num_ctx, int)
+            and isinstance(self.num_predict, int)
+            and self.num_ctx - self.num_predict < 512
+        ):
+            errors.append(
+                "OLLAMA_NUM_CTX deve exceder OLLAMA_NUM_PREDICT em pelo menos 512 tokens (espaço para o prompt)"
+            )
         if self.rag_mode == "ollama":
             if _split_host_port(self.ollama_base_url) is None:
                 errors.append(f"OLLAMA_BASE_URL={self.ollama_base_url!r}: informe uma URL http(s) completa")
@@ -101,13 +120,15 @@ class Settings:
             rag_mode=mode,
             ollama_base_url=read("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/"),
             embedding_model=read("OLLAMA_EMBED_MODEL", "nomic-embed-text-v2-moe"),
-            generation_model=read("OLLAMA_CHAT_MODEL", "qwen3:0.6b"),
+            generation_model=read("OLLAMA_CHAT_MODEL", "qwen3:1.7b"),
             retrieval_k=_parse_int("RAG_TOP_K", read("RAG_TOP_K", "5")),
             min_score=_parse_float("RAG_MIN_SCORE", read("RAG_MIN_SCORE", "0.12")),
             vector_only_min_score=_parse_float("RAG_VECTOR_ONLY_MIN_SCORE", read("RAG_VECTOR_ONLY_MIN_SCORE", "0.5")),
             embed_timeout_s=_parse_float("OLLAMA_EMBED_TIMEOUT_S", read("OLLAMA_EMBED_TIMEOUT_S", "30")),
             generate_timeout_s=_parse_float("OLLAMA_GENERATE_TIMEOUT_S", read("OLLAMA_GENERATE_TIMEOUT_S", "60")),
             embed_batch_size=_parse_int("OLLAMA_EMBED_BATCH_SIZE", read("OLLAMA_EMBED_BATCH_SIZE", "32")),
+            num_ctx=_parse_int("OLLAMA_NUM_CTX", read("OLLAMA_NUM_CTX", "4096")),
+            num_predict=_parse_int("OLLAMA_NUM_PREDICT", read("OLLAMA_NUM_PREDICT", "300")),
             source=source,
         )
 
@@ -126,6 +147,8 @@ class Settings:
             "embed_timeout_s": self.embed_timeout_s,
             "generate_timeout_s": self.generate_timeout_s,
             "embed_batch_size": self.embed_batch_size,
+            "num_ctx": self.num_ctx,
+            "num_predict": self.num_predict,
         }
 
 

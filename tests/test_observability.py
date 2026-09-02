@@ -266,7 +266,7 @@ def mock_ollama(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, int]]:
         return httpx.Response(
             200,
             json={
-                "response": "O prazo é de 10 dias corridos.",
+                "message": {"role": "assistant", "content": "O prazo é de 10 dias corridos."},
                 "done": True,
                 "done_reason": "stop",
                 "prompt_eval_count": 200,
