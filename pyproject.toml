@@ -86,7 +86,9 @@ known-first-party = ["app", "evals"]
 quote-style = "double"
 
 [tool.mypy]
-python_version = "3.11"
+# Sem python_version fixo: o mypy analisa com a versão do interpretador que o executa (a CI cobre
+# 3.11/3.12/3.13). Fixar "3.11" quebrava em 3.12+, onde o lock resolve numpy 2.5 e seus stubs usam
+# `type X = ...` (PEP 695), inválido para o alvo 3.11.
 files = ["app", "evals"]
 strict = true
 warn_unreachable = true
