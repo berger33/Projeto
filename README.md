@@ -10,36 +10,38 @@
 
 | Evidência | Onde verificar |
 |---|---|
-| API tipada e validação | [`app/main.py`](app/main.py) |
-| ingestão de PDF/CSV | [`app/documents.py`](app/documents.py) |
-| providers de embeddings | [`app/embeddings.py`](app/embeddings.py) |
-| índice vetorial + cosine similarity | [`app/retrieval.py`](app/retrieval.py) |
-| prompt e geração | [`app/generation.py`](app/generation.py) |
-| orquestração RAG | [`app/rag.py`](app/rag.py) |
-| testes de domínio/API | [`tests/test_rag.py`](tests/test_rag.py) |
-| evals versionados | [`evals/cases.json`](evals/cases.json) |
+| API tipada, validação, contrato de erro e segurança opcional | [`app/main.py`](app/main.py) · [`app/security.py`](app/security.py) |
+| ingestão de PDF/CSV/MD/TXT com relatório e dedup | [`app/documents.py`](app/documents.py) · chunking por seção: [`app/chunking.py`](app/chunking.py) |
+| providers de embeddings (prefixos por família, lotes, retry) | [`app/embeddings.py`](app/embeddings.py) |
+| busca vetorial numpy + índice persistido | [`app/store.py`](app/store.py) · [`app/retrieval.py`](app/retrieval.py) · [`app/persistence.py`](app/persistence.py) |
+| retrieval híbrido (BM25 + cosseno, RRF, filtros de evidência, MMR) | [`app/retriever.py`](app/retriever.py) · [`app/lexical.py`](app/lexical.py) · [`app/rerank.py`](app/rerank.py) |
+| prompt com orçamento, geração estruturada e juiz de recusa | [`app/generation.py`](app/generation.py) · [`app/refusal.py`](app/refusal.py) · [`app/sources.py`](app/sources.py) |
+| orquestração RAG, cache e concorrência | [`app/rag.py`](app/rag.py) · [`app/cache.py`](app/cache.py) · [`app/ollama_client.py`](app/ollama_client.py) |
+| testes (400+) | [`tests/`](tests/) — por módulo, ponta a ponta com PDF real e contrato do Ollama simulado |
+| evals versionados + gate de regressão | [`evals/cases.json`](evals/cases.json) · [`evals/thresholds.json`](evals/thresholds.json) |
+| auditoria técnica (mapeamento, achados, plano) | [`auditoria/`](auditoria/) |
 | arquitetura | [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) · operação: [`docs/OPERACAO.md`](docs/OPERACAO.md) · decisões: [`docs/DECISOES.md`](docs/DECISOES.md) |
 
 ## Arquitetura
 
 ```text
-PDF / CSV
+corpus/ (PDF / CSV / MD / TXT)
    ↓
-Document loader + chunking
+Ingestão: extração, chunking por seção, dedup de quase-duplicatas, relatório por arquivo
    ↓
-Embedding provider
-   ├─ local hash embedding (CI/offline)
-   └─ Ollama / nomic-embed-text-v2-moe
+Embedding provider                      ┐
+   ├─ hash local (CI/offline, não semântico)  │ índice persistido (.npy + manifest.json)
+   └─ Ollama / nomic-embed-text-v2-moe        ┘ reconstruído só quando corpus/modelo/chunking mudam
    ↓
-Vector index + cosine similarity
+Retrieval híbrido: cosseno (numpy) + BM25 → fusão RRF → filtros de evidência → MMR → top-k
    ↓
-Top-k + threshold + gate de relevância
+Gerador
+   ├─ extrativo local (frases do contexto)
+   └─ Ollama / qwen3 via /api/chat, think:false, saída JSON, prompt com orçamento de tokens
    ↓
-Answer generator
-   ├─ fallback extrativo local
-   └─ Ollama LLM / qwen3
+Juiz de recusa (declaração, padrão PT-BR, sustentação, números) → fontes derivadas do uso real
    ↓
-FastAPI → resposta + fontes + confiança + modo
+FastAPI → answer + status + sources (chunk, seção, trecho) + confidence + request_id + timings
 ```
 
 O modo `ollama` é o caminho **RAG generativo**: documentos e pergunta viram embeddings, os trechos relevantes são recuperados e enviados ao LLM com instruções para responder apenas com o contexto. O modo `local` existe para CI e execução offline; ele é extrativo e não é apresentado como LLM.
@@ -60,6 +62,8 @@ uvicorn app.main:app --reload
 ```
 
 Com [uv](https://docs.astral.sh/uv/) instalado, o equivalente é `uv sync` (cria `.venv` com runtime + dev) e `uv run uvicorn app.main:app --reload`.
+
+No Windows, `INICIAR_WINDOWS.bat` cria o `.venv`, instala as dependências, roda a suíte e sobe o servidor; `DIAGNOSTICO_WINDOWS.bat` verifica Python, imports de runtime, o índice persistido (`python -m app.ingest --check`) e se o Ollama está no PATH.
 
 Abra `http://127.0.0.1:8000` (interface mínima servida de `app/static/`, que consome a própria API) ou `/docs`.
 
@@ -267,7 +271,24 @@ A imagem (`python:3.12-slim`) instala apenas as dependências de runtime travada
 
 ## Deploy
 
-O repositório mantém configuração de container/deploy. Uma URL pública de backend só será anunciada quando a aplicação estiver realmente implantada e monitorada. A interface em `/` (`app/static/`) é um cliente fino da própria API — mostra status, confiança, fontes com trecho e `request_id` — e não existe demo estática separada.
+Guias em [`deploy/OCI_DEPLOY.md`](deploy/OCI_DEPLOY.md) (VM com Docker: `docker compose` para API + Ollama, ou só a API em modo local) e [`deploy/RENDER_DEPLOY.md`](deploy/RENDER_DEPLOY.md) (`render.yaml`, plano free = modo local, sem LLM). Uma URL pública de backend só será anunciada quando a aplicação estiver realmente implantada e monitorada. A interface em `/` (`app/static/`) é um cliente fino da própria API — mostra status, confiança, fontes com trecho e `request_id` — e não existe demo estática separada.
+
+## Limitações
+
+Declaradas para que a avaliação não dependa de suposições (detalhes e histórico em [`docs/DECISOES.md`](docs/DECISOES.md) e [`auditoria/`](auditoria/)):
+
+- **O modo `local` não é semântico.** O hash embedding só aproxima sobreposição lexical; ele existe para CI, testes e execução offline. Toda métrica do eval local mede retrieval híbrido + recusa + extração, **não** qualidade de geração. O sinal do hash não é discriminativo (mutante sobrevivente R-07) — uma limitação do provider de teste, não do pipeline.
+- **O perfil `ollama` é provisório.** Limiares (`min_score`, `vector_only_min_score`, `mmr_lambda`, …) foram derivados da escala típica de modelos densos; ainda não foram calibrados com `nomic-embed-text-v2-moe` real (`python -m evals.calibrate --mode ollama`) nem existe um `evals/results/*-ollama.json` versionado. Até lá, os números de recall/MRR do README valem só para o modo local.
+- **Latência em CPU não medida.** `qwen3:1.7b` com `num_ctx` 4096 no hardware alvo (i5-1135G7, 16 GB, sem GPU) deve responder em segundos; o p95 real depende de prefill e ainda não foi coletado.
+- **Corpus pequeno e em PT-BR.** 4 documentos, 25 chunks. O chunking foi desenhado para títulos numerados e o analisador lexical (stopwords, radicais) é específico de português; outros idiomas degradam o canal BM25.
+- **Sem OCR nem subpastas.** PDFs só de imagem geram zero chunks (logado como `ingest.empty`); apenas arquivos no nível raiz de `corpus/` são lidos.
+- **Dedup só de quase-duplicatas curtas.** Trechos com Jaccard de radicais ≥ 0,9 são deduplicados; paráfrases entre `faq.csv` e `faq.pdf` coexistem por decisão (D8) e podem aparecer as duas nas fontes.
+- **Rate limit por processo.** O token bucket vive na memória de cada worker; com N workers o limite efetivo é N× e não há estado compartilhado.
+- **Busca exaustiva.** O `NumpyVectorStore` percorre toda a matriz (< 1 ms para 10 mil chunks × 768 dims; ~5 ms para 50 mil × 1024). Acima disso, a interface `VectorStore` é o ponto de troca por um índice aproximado ou pgvector.
+- **Sem autenticação por documento.** O corpus é público; o filtro por metadado do `VectorStore` é o ponto de extensão para ACL, não uma implementação.
+- **Deploy gratuito = modo local.** `render.yaml` publica a API sem LLM (o plano free não roda Ollama); o caminho generativo exige uma VM (`deploy/OCI_DEPLOY.md`).
+
+Vulnerabilidades: ver [`SECURITY.md`](SECURITY.md). Histórico de mudanças: [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Uso de IA no desenvolvimento
 

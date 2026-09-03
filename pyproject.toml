@@ -1,6 +1,6 @@
 [project]
 name = "aurora-document-rag"
-version = "2.0.0"
+version = "2.1.0"
 description = "RAG documental com FastAPI, retrieval vetorial, geração local via Ollama e citações rastreáveis."
 readme = "README.md"
 license = { text = "MIT" }
