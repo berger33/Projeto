@@ -1,7 +1,31 @@
+# Blueprint do Render (deploy alternativo; ver deploy/RENDER_DEPLOY.md).
+#
+# O plano free não roda Ollama (sem GPU, 512 MB de RAM, sem serviço auxiliar), então este blueprint
+# publica a API em modo `local` (hash embedding + gerador extrativo) — útil para demonstrar contrato,
+# retrieval e recusa, não a geração com LLM. Para o modo `ollama` use o docker-compose.yml numa VM
+# (deploy/OCI_DEPLOY.md) ou aponte OLLAMA_BASE_URL para um servidor Ollama acessível.
 services:
   - type: web
-    name: aurora-moda-agente
+    name: aurora-document-rag
     runtime: docker
     plan: free
-    healthCheckPath: /health
+    # /ready confirma que o índice existe (e, em modo ollama, que servidor e modelos respondem).
+    healthCheckPath: /ready
     autoDeploy: true
+    envVars:
+      - key: RAG_MODE
+        value: local
+      - key: LOG_FORMAT
+        value: json
+      - key: LOG_LEVEL
+        value: INFO
+      # A imagem já traz o índice pré-construído em /data/index (modo local).
+      - key: RAG_INDEX_DIR
+        value: /data/index
+      # Opcional: proteger a API pública com token (>= 16 caracteres) e limitar por IP.
+      # - key: API_TOKEN
+      #   sync: false
+      # - key: RAG_RATE_LIMIT_PER_MINUTE
+      #   value: "30"
+      # - key: RAG_TRUST_PROXY
+      #   value: "true"

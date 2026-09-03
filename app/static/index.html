@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Aurora Document RAG</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <main class="card">
+    <header>
+      <h1>Aurora Document RAG</h1>
+      <p class="muted">Perguntas respondidas exclusivamente com base na documentação da loja. Sem contexto suficiente, o sistema recusa em vez de inventar.</p>
+    </header>
+
+    <form id="ask-form" autocomplete="off">
+      <label for="question" class="muted">Pergunta</label>
+      <textarea id="question" name="question" minlength="2" maxlength="2000" placeholder="Ex.: Qual é o prazo para devolução?" required></textarea>
+      <div class="row">
+        <button type="submit" id="submit">Perguntar</button>
+        <span id="status" class="muted" aria-live="polite"></span>
+      </div>
+    </form>
+
+    <section id="result" hidden>
+      <div class="badges">
+        <span class="badge" id="badge-status"></span>
+        <span class="badge" id="badge-confidence"></span>
+        <span class="badge" id="badge-mode"></span>
+      </div>
+      <p id="answer" class="answer"></p>
+      <details id="sources-wrap">
+        <summary>Fontes (<span id="sources-count">0</span>)</summary>
+        <ol id="sources"></ol>
+      </details>
+      <p class="meta muted">
+        <span id="timings"></span>
+        <span>request_id: <code id="request-id"></code></span>
+      </p>
+    </section>
+
+    <section id="error" class="error" hidden></section>
+  </main>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>

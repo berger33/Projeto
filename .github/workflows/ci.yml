@@ -11,21 +11,103 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+      - name: Install locked dependencies
+        run: python -m pip install -r requirements.txt -r requirements-dev.txt
+      - name: Lint
+        run: ruff check app evals tests
+      - name: Format check
+        run: ruff format --check app evals tests
+      - name: Compile Python
+        run: python -m compileall -q app evals tests
+      - name: Type check (mypy strict)
+        run: mypy app evals
+      - name: Tests with coverage floor
+        run: |
+          coverage run -m pytest -q
+          coverage report
+      - name: Validate eval JSON
+        run: |
+          python -m json.tool evals/cases.json >/dev/null
+          python -m json.tool evals/thresholds.json >/dev/null
+      - name: Eval gate (local mode, thresholds from evals/thresholds.json)
+        # Os pisos são aplicados por tests/test_evals.py; aqui o relatório completo fica visível no log
+        # e o exit code cobre falhas de execução (erros por caso).
+        run: python -m evals.run --mode local
+      - name: Index build check (python -m app.ingest)
+        run: |
+          python -m app.ingest --index-dir /tmp/ci-index
+          python -m app.ingest --index-dir /tmp/ci-index --check
+
+  whitespace:
+    # Em PRs, compara com a base real (origin/<base>...HEAD); em push na main, o último commit.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Trailing whitespace / conflict markers
+        run: |
+          if [ -n "${{ github.base_ref }}" ]; then
+            git diff --check "origin/${{ github.base_ref }}...HEAD"
+          else
+            git diff --check HEAD~1 HEAD
+          fi
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t aurora-document-rag:ci .
+      - name: Container boots and /ready answers
+        run: |
+          docker run -d --name aurora -p 8000:8000 -e RAG_MODE=local aurora-document-rag:ci
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/ready >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8000/ready
+          curl -fsS -X POST http://127.0.0.1:8000/api/ask -H 'content-type: application/json' \
+            -d '{"question":"Qual é o prazo para devolução?"}' | grep -q '"status":"answered"'
+          docker logs aurora | tail -n 20
+          docker rm -f aurora
+
+  lockfile:
+    # Garante que requirements*.txt foram regenerados a partir do uv.lock (fonte única de verdade).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Lockfile is up to date with pyproject.toml
+        run: uv lock --check
+      - name: Exported requirements match lockfile
+        run: |
+          uv export --no-dev --no-hashes --no-emit-project --format requirements-txt --output-file /tmp/requirements.txt
+          uv export --only-dev --no-hashes --no-emit-project --format requirements-txt --output-file /tmp/requirements-dev.txt
+          diff <(grep -v '^#' requirements.txt) <(grep -v '^#' /tmp/requirements.txt)
+          diff <(grep -v '^#' requirements-dev.txt) <(grep -v '^#' /tmp/requirements-dev.txt)
+
+  audit:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
-      - name: Install dependencies
-        run: python -m pip install -r requirements.txt
-      - name: Compile Python
-        run: python -m compileall -q app tests
-      - name: Run unit API and behavior tests
-        env:
-          PYTHONPATH: .
-        run: python -m pytest -q
-      - name: Validate eval JSON
-        run: python -m json.tool evals/cases.json >/dev/null
-      - name: Check whitespace
-        run: git diff --check
+      - name: Install runtime dependencies
+        run: python -m pip install -r requirements.txt pip-audit
+      - name: Known vulnerabilities in locked runtime dependencies
+        run: pip-audit -r requirements.txt --progress-spinner off

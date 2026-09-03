@@ -15,7 +15,7 @@ if %errorlevel%==0 (
     where python >nul 2>nul
     if %errorlevel% neq 0 (
         echo [ERRO] Python nao foi encontrado no PATH.
-        echo Instale Python 3.12, 3.13 ou 3.14 e tente novamente.
+        echo Instale Python 3.11 ou superior e tente novamente.
         pause
         exit /b 1
     )
@@ -29,9 +29,9 @@ if %errorlevel% neq 0 goto :erro
 ".venv\Scripts\python.exe" -m pip install --upgrade pip setuptools wheel
 if %errorlevel% neq 0 goto :erro
 
-".venv\Scripts\python.exe" -m pip install --only-binary=:all: -r requirements.txt
+".venv\Scripts\python.exe" -m pip install --only-binary=:all: -r requirements.txt -r requirements-dev.txt
 if %errorlevel% neq 0 (
-    ".venv\Scripts\python.exe" -m pip install -r requirements.txt
+    ".venv\Scripts\python.exe" -m pip install -r requirements.txt -r requirements-dev.txt
     if %errorlevel% neq 0 goto :erro
 )
 
